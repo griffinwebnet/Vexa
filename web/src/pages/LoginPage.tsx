@@ -43,7 +43,7 @@ export default function LoginPage() {
             Vexa
           </CardTitle>
           <CardDescription className="text-center">
-            Sign in to your Active Directory management console
+            Sign in to your directory management console
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -86,7 +86,7 @@ export default function LoginPage() {
             </Button>
           </form>
           <div className="mt-4 text-center text-sm text-muted-foreground">
-            Authenticate with your Linux PAM or Active Directory credentials
+            Authenticate with your Linux PAM or directory credentials
           </div>
         </CardContent>
       </Card>

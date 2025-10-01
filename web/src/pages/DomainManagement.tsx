@@ -19,7 +19,7 @@ export default function DomainManagement() {
       <div>
         <h1 className="text-3xl font-bold">Domain Management</h1>
         <p className="text-muted-foreground">
-          Configure and manage your Active Directory domain
+          Configure and manage your Vexa Domain
         </p>
       </div>
 

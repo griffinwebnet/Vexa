@@ -23,10 +23,10 @@ export default function Users() {
     <div className="space-y-8">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Users</h1>
-          <p className="text-muted-foreground">
-            Manage Active Directory users
-          </p>
+        <h1 className="text-3xl font-bold">Manage Directory Users</h1>
+        <p className="text-muted-foreground">
+          AD-compatible users
+        </p>
         </div>
         <Button onClick={() => setShowAddModal(true)}>
           <UserPlus className="mr-2 h-4 w-4" />

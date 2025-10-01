@@ -58,7 +58,7 @@ export default function SetupWizard() {
               Welcome to Vexa
             </h1>
             <p className="text-muted-foreground text-lg">
-              Let's set up your Active Directory environment
+              Let's set up your directory environment
             </p>
           </div>
 
@@ -70,7 +70,7 @@ export default function SetupWizard() {
                 </div>
                 <CardTitle>New Domain</CardTitle>
                 <CardDescription>
-                  Set up a brand new Active Directory domain
+                  Set up a brand new Vexa Domain
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -110,7 +110,7 @@ export default function SetupWizard() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  Transfer your existing Active Directory domain to Vexa infrastructure.
+                  Transfer your existing Vexa Domain to Vexa infrastructure.
                 </p>
                 <p className="text-xs text-yellow-600 dark:text-yellow-500 mt-2">Coming soon</p>
               </CardContent>
@@ -128,7 +128,7 @@ export default function SetupWizard() {
           <CardHeader>
             <CardTitle>New Domain Setup</CardTitle>
             <CardDescription>
-              Configure your new Active Directory domain
+              Configure your new Vexa Domain
             </CardDescription>
           </CardHeader>
           <CardContent>

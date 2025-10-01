@@ -74,9 +74,9 @@ export default function Computers() {
     <div className="space-y-8">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Computers</h1>
+          <h1 className="text-3xl font-bold">Domain-Joined Computers and Devices</h1>
           <p className="text-muted-foreground">
-            Domain-joined computers and devices
+            AD-compatible device enrollment
           </p>
         </div>
         {overlayStatus?.enabled && (

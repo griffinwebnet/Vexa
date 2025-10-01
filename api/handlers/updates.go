@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
+	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
@@ -48,7 +50,7 @@ func CheckForUpdates(c *gin.Context) {
 	resp, err := client.Get(url)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, UpdateCheckResponse{
-			CurrentVersion: "0.0.1-prealpha",
+			CurrentVersion: "0.0.2-prealpha",
 			Error:          "Failed to check for updates: " + err.Error(),
 		})
 		return
@@ -58,8 +60,8 @@ func CheckForUpdates(c *gin.Context) {
 	// Handle 404 (no releases) or other errors
 	if resp.StatusCode == 404 {
 		c.JSON(http.StatusOK, UpdateCheckResponse{
-			CurrentVersion:  "0.0.1-prealpha",
-			LatestVersion:   "0.0.1-prealpha",
+			CurrentVersion:  "0.0.2-prealpha",
+			LatestVersion:   "0.0.2-prealpha",
 			UpdateAvailable: false,
 			Error:           "No releases found (repository may not have releases yet)",
 		})
@@ -68,7 +70,7 @@ func CheckForUpdates(c *gin.Context) {
 
 	if resp.StatusCode != 200 {
 		c.JSON(http.StatusInternalServerError, UpdateCheckResponse{
-			CurrentVersion: "0.0.1-prealpha",
+			CurrentVersion: "0.0.2-prealpha",
 			Error:          "GitHub API returned status: " + resp.Status,
 		})
 		return
@@ -90,8 +92,8 @@ func CheckForUpdates(c *gin.Context) {
 	// If no releases found, return current version
 	if len(releases) == 0 {
 		c.JSON(http.StatusOK, UpdateCheckResponse{
-			CurrentVersion:  "0.0.1-prealpha",
-			LatestVersion:   "0.0.1-prealpha",
+			CurrentVersion:  "0.0.2-prealpha",
+			LatestVersion:   "0.0.2-prealpha",
 			UpdateAvailable: false,
 		})
 		return
@@ -110,7 +112,7 @@ func CheckForUpdates(c *gin.Context) {
 		return compareVersions(stableReleases[i].TagName, stableReleases[j].TagName) > 0
 	})
 
-	currentVersion := "0.0.1-prealpha"
+	currentVersion := "0.0.2-prealpha"
 	updateAvailable := false
 	var latestRelease *GitHubRelease
 
@@ -179,4 +181,37 @@ func compareVersions(v1, v2 string) int {
 	}
 
 	return 0
+}
+
+// UpgradeResponse represents the response for upgrade operation
+type UpgradeResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Error   string `json:"error,omitempty"`
+}
+
+// PerformUpgrade executes the upgrade process via Dart CLI
+func PerformUpgrade(c *gin.Context) {
+	// Execute the Dart CLI upgrade command
+	cmd := exec.Command("dart", "run", "vexa", "upgrade")
+	cmd.Dir = "/opt/vexa/vexa-cli/vexa" // Adjust path as needed
+
+	// Capture output for streaming
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, UpgradeResponse{
+			Success: false,
+			Error:   "Upgrade failed: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, UpgradeResponse{
+		Success: true,
+		Message: "Upgrade completed successfully",
+	})
+
+	// Log the output for debugging
+	log.Printf("Upgrade output: %s", string(output))
 }

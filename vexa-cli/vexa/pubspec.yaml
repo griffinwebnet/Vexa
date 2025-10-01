@@ -1,0 +1,17 @@
+name: vexa
+description: Vexa CLI - Directory Services Management Tool
+version: 0.0.2-prealpha
+repository: https://github.com/griffinwebnet/Vexa
+
+environment:
+  sdk: ^3.5.4
+
+# Add regular dependencies here.
+dependencies:
+  args: ^2.4.2
+  http: ^1.1.0
+  yaml: ^3.1.2
+
+dev_dependencies:
+  lints: ^4.0.0
+  test: ^1.24.0

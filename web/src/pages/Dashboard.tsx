@@ -17,21 +17,21 @@ export default function Dashboard() {
       name: 'Total Users',
       value: '0',
       icon: Users,
-      description: 'Active directory users',
+      description: 'AD-compatible users',
       color: 'text-blue-500',
     },
     {
       name: 'Groups',
       value: '0',
       icon: UsersRound,
-      description: 'Security groups',
+      description: 'AD-compatible groups',
       color: 'text-green-500',
     },
     {
       name: 'Computers',
       value: '0',
       icon: Monitor,
-      description: 'Domain-joined devices',
+      description: 'AD-compatible device enrollment',
       color: 'text-purple-500',
     },
     {
@@ -48,7 +48,7 @@ export default function Dashboard() {
       <div>
         <h1 className="text-3xl font-bold">Dashboard</h1>
         <p className="text-muted-foreground">
-          Welcome to Vexa Active Directory Management
+          Welcome to Vexa Directory Services
         </p>
       </div>
 
@@ -75,9 +75,9 @@ export default function Dashboard() {
       {/* Domain Information */}
       <Card>
         <CardHeader>
-          <CardTitle>Domain Information</CardTitle>
+          <CardTitle>Current Directory Domain Configuration</CardTitle>
           <CardDescription>
-            Current Active Directory domain configuration
+            AD-compatible domain settings
           </CardDescription>
         </CardHeader>
         <CardContent>

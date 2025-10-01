@@ -49,7 +49,7 @@ export default function DomainSetup() {
       <div>
         <h1 className="text-3xl font-bold">Domain Setup</h1>
         <p className="text-muted-foreground">
-          Provision your Samba Active Directory Domain Controller
+          Provision your Vexa Domain controller
         </p>
       </div>
 
@@ -57,7 +57,7 @@ export default function DomainSetup() {
         <CardHeader>
           <CardTitle>Domain Configuration</CardTitle>
           <CardDescription>
-            Configure your new Active Directory domain
+            Configure your new Vexa Domain
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -82,7 +82,7 @@ export default function DomainSetup() {
                 Domain Provisioned Successfully!
               </h3>
               <p className="text-muted-foreground">
-                Your Active Directory domain controller is now running
+                Your Vexa Domain controller is now running
               </p>
             </div>
           ) : (

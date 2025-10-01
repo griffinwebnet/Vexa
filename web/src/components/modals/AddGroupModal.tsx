@@ -44,7 +44,7 @@ export function AddGroupModal({ open, onClose, onSuccess }: AddGroupModalProps) 
         <DialogHeader>
           <DialogTitle>Add New Group</DialogTitle>
           <DialogDescription>
-            Create a new Active Directory security group
+            Create a new directory security group
           </DialogDescription>
         </DialogHeader>
 

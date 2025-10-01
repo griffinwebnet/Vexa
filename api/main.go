@@ -9,7 +9,7 @@ import (
 	"github.com/vexa/api/middleware"
 )
 
-const Version = "0.0.1-prealpha"
+const Version = "0.0.2-prealpha"
 
 func main() {
 	// Set Gin mode
@@ -43,6 +43,7 @@ func main() {
 			})
 		})
 		public.GET("/updates/check", handlers.CheckForUpdates)
+		public.POST("/updates/upgrade", handlers.PerformUpgrade)
 	}
 
 	// Protected routes (require authentication)

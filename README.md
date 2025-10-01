@@ -1,13 +1,16 @@
-# Vexa - Active Directory Replacement
+# Vexa - Directory Services Platform
 
-A modern, open-source Active Directory replacement built on Samba AD DC with a beautiful web-based management interface.
+A modern, open-source directory services platform built on Samba AD DC with a beautiful web-based management interface.
+
+![Vexa Dashboard](vexa.png)
+*Vexa's modern, responsive web interface with dark mode support*
 
 ## Features
 
-- **Samba-based AD DC**: Full Active Directory Domain Controller functionality
+- **Samba-based AD DC**: Full AD-compatible Domain Controller functionality
 - **Modern Web Interface**: Beautiful, responsive React-based admin interface
-- **PAM Authentication**: Authenticate with Linux PAM or Active Directory
-- **User & Group Management**: Easy-to-use interface for managing users and groups
+- **PAM Authentication**: Authenticate with Linux PAM or directory credentials
+- **User & Group Management**: Easy-to-use interface for managing AD-compatible users and groups
 - **DNS Management**: Integrated DNS management (BIND9 or Samba Internal)
 - **Mobile Responsive**: Works on desktop, tablet, and mobile devices
 - **Light & Dark Mode**: Comfortable interface for any environment

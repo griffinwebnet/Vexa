@@ -101,7 +101,7 @@ export function AddUserModal({ open, onClose, onSuccess }: AddUserModalProps) {
         <DialogHeader>
           <DialogTitle>Add New User</DialogTitle>
           <DialogDescription>
-            Create a new Active Directory user account
+            Create a new directory user account
           </DialogDescription>
         </DialogHeader>
 

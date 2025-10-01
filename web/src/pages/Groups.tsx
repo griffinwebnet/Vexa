@@ -45,10 +45,10 @@ export default function Groups() {
     <div className="space-y-8">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Groups</h1>
-          <p className="text-muted-foreground">
-            Manage Active Directory groups
-          </p>
+        <h1 className="text-3xl font-bold">Manage Directory Groups</h1>
+        <p className="text-muted-foreground">
+          AD-compatible groups
+        </p>
         </div>
         <Button onClick={() => setShowAddModal(true)}>
           <FolderPlus className="mr-2 h-4 w-4" />
