@@ -2,71 +2,33 @@ package handlers
 
 import (
 	"net/http"
-	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/vexa/api/models"
+	"github.com/vexa/api/services"
 )
 
-type User struct {
-	Username    string   `json:"username"`
-	FullName    string   `json:"full_name"`
-	Email       string   `json:"email"`
-	Enabled     bool     `json:"enabled"`
-	Groups      []string `json:"groups"`
-	Description string   `json:"description"`
+// UserHandler handles HTTP requests for user operations
+type UserHandler struct {
+	userService *services.UserService
 }
 
-type CreateUserRequest struct {
-	Username    string `json:"username" binding:"required"`
-	Password    string `json:"password" binding:"required"`
-	FullName    string `json:"full_name"`
-	Email       string `json:"email"`
-	Description string `json:"description"`
-	Group       string `json:"group"`
-	OUPath      string `json:"ou_path"`
+// NewUserHandler creates a new UserHandler instance
+func NewUserHandler() *UserHandler {
+	return &UserHandler{
+		userService: services.NewUserService(),
+	}
 }
 
 // ListUsers returns all users in the domain
-func ListUsers(c *gin.Context) {
-	// Dev mode: Return dummy data
-	if os.Getenv("ENV") == "development" {
-		users := []User{
-			{Username: "jsmith", FullName: "John Smith", Email: "jsmith@example.com", Enabled: true},
-			{Username: "mjohnson", FullName: "Mary Johnson", Email: "mjohnson@example.com", Enabled: true},
-			{Username: "bwilliams", FullName: "Bob Williams", Email: "bwilliams@example.com", Enabled: true},
-			{Username: "administrator", FullName: "Administrator", Email: "admin@example.com", Enabled: true},
-		}
-		c.JSON(http.StatusOK, gin.H{
-			"users": users,
-			"count": len(users),
-		})
-		return
-	}
-
-	cmd := exec.Command("samba-tool", "user", "list")
-	output, err := cmd.CombinedOutput()
-
+func (h *UserHandler) ListUsers(c *gin.Context) {
+	users, err := h.userService.ListUsers()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to list users",
-			"details": string(output),
+			"error": err.Error(),
 		})
 		return
-	}
-
-	// Parse user list
-	usernames := strings.Split(strings.TrimSpace(string(output)), "\n")
-	users := make([]User, 0, len(usernames))
-
-	for _, username := range usernames {
-		if username != "" {
-			users = append(users, User{
-				Username: username,
-				Enabled:  true, // TODO: Get actual status
-			})
-		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -76,8 +38,8 @@ func ListUsers(c *gin.Context) {
 }
 
 // CreateUser creates a new user in the domain
-func CreateUser(c *gin.Context) {
-	var req CreateUserRequest
+func (h *UserHandler) CreateUser(c *gin.Context) {
+	var req models.CreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Invalid request format",
@@ -85,39 +47,10 @@ func CreateUser(c *gin.Context) {
 		return
 	}
 
-	// Build samba-tool command
-	args := []string{
-		"user", "create",
-		req.Username,
-		req.Password,
-	}
-
-	if req.FullName != "" {
-		args = append(args, "--given-name="+req.FullName)
-	}
-	if req.Email != "" {
-		args = append(args, "--mail-address="+req.Email)
-	}
-	if req.OUPath != "" {
-		args = append(args, "--userou="+req.OUPath)
-	}
-
-	cmd := exec.Command("samba-tool", args...)
-	output, err := cmd.CombinedOutput()
-
+	err := h.userService.CreateUser(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to create user",
-			"details": string(output),
-		})
-		return
-	}
-
-	// Add user to group if specified
-	if req.Group != "" && req.Group != "Domain Users" {
-		groupCmd := exec.Command("samba-tool", "group", "addmembers", req.Group, req.Username)
-		if err := groupCmd.Run(); err != nil {
-			// User created but group add failed - log but don't fail
+		// Check if it's a warning (user created but group add failed)
+		if strings.Contains(err.Error(), "user created but failed to add to group") {
 			c.JSON(http.StatusCreated, gin.H{
 				"message":  "User created but failed to add to group",
 				"username": req.Username,
@@ -125,6 +58,11 @@ func CreateUser(c *gin.Context) {
 			})
 			return
 		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
@@ -134,12 +72,10 @@ func CreateUser(c *gin.Context) {
 }
 
 // GetUser returns details for a specific user
-func GetUser(c *gin.Context) {
+func (h *UserHandler) GetUser(c *gin.Context) {
 	username := c.Param("id")
 
-	cmd := exec.Command("samba-tool", "user", "show", username)
-	output, err := cmd.CombinedOutput()
-
+	user, err := h.userService.GetUser(username)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "User not found",
@@ -147,35 +83,43 @@ func GetUser(c *gin.Context) {
 		return
 	}
 
-	// TODO: Parse user details from output
-	c.JSON(http.StatusOK, gin.H{
-		"username": username,
-		"details":  string(output),
-	})
+	c.JSON(http.StatusOK, user)
 }
 
 // UpdateUser updates an existing user
-func UpdateUser(c *gin.Context) {
+func (h *UserHandler) UpdateUser(c *gin.Context) {
 	username := c.Param("id")
 
-	// TODO: Implement user update logic
-	c.JSON(http.StatusNotImplemented, gin.H{
-		"message":  "User update not implemented",
+	var req models.UpdateUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid request format",
+		})
+		return
+	}
+
+	err := h.userService.UpdateUser(username, req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "User updated successfully",
 		"username": username,
 	})
 }
 
 // DeleteUser removes a user from the domain
-func DeleteUser(c *gin.Context) {
+func (h *UserHandler) DeleteUser(c *gin.Context) {
 	username := c.Param("id")
 
-	cmd := exec.Command("samba-tool", "user", "delete", username)
-	output, err := cmd.CombinedOutput()
-
+	err := h.userService.DeleteUser(username)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to delete user",
-			"details": string(output),
+			"error": err.Error(),
 		})
 		return
 	}

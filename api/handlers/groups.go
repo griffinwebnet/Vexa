@@ -2,63 +2,32 @@ package handlers
 
 import (
 	"net/http"
-	"os"
-	"os/exec"
-	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/vexa/api/models"
+	"github.com/vexa/api/services"
 )
 
-type Group struct {
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Members     []string `json:"members"`
+// GroupHandler handles HTTP requests for group operations
+type GroupHandler struct {
+	groupService *services.GroupService
 }
 
-type CreateGroupRequest struct {
-	Name        string `json:"name" binding:"required"`
-	Description string `json:"description"`
+// NewGroupHandler creates a new GroupHandler instance
+func NewGroupHandler() *GroupHandler {
+	return &GroupHandler{
+		groupService: services.NewGroupService(),
+	}
 }
 
 // ListGroups returns all groups in the domain
-func ListGroups(c *gin.Context) {
-	// Dev mode: Return dummy data
-	if os.Getenv("ENV") == "development" {
-		groups := []Group{
-			{Name: "Domain Admins", Description: "Domain administrators"},
-			{Name: "Domain Users", Description: "All domain users"},
-			{Name: "IT Staff", Description: "IT department"},
-			{Name: "Finance", Description: "Finance department"},
-			{Name: "HR", Description: "Human resources"},
-		}
-		c.JSON(http.StatusOK, gin.H{
-			"groups": groups,
-			"count":  len(groups),
-		})
-		return
-	}
-
-	cmd := exec.Command("samba-tool", "group", "list")
-	output, err := cmd.CombinedOutput()
-
+func (h *GroupHandler) ListGroups(c *gin.Context) {
+	groups, err := h.groupService.ListGroups()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to list groups",
-			"details": string(output),
+			"error": err.Error(),
 		})
 		return
-	}
-
-	// Parse group list
-	groupNames := strings.Split(strings.TrimSpace(string(output)), "\n")
-	groups := make([]Group, 0, len(groupNames))
-
-	for _, name := range groupNames {
-		if name != "" {
-			groups = append(groups, Group{
-				Name: name,
-			})
-		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -68,8 +37,8 @@ func ListGroups(c *gin.Context) {
 }
 
 // CreateGroup creates a new group in the domain
-func CreateGroup(c *gin.Context) {
-	var req CreateGroupRequest
+func (h *GroupHandler) CreateGroup(c *gin.Context) {
+	var req models.CreateGroupRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Invalid request format",
@@ -77,18 +46,10 @@ func CreateGroup(c *gin.Context) {
 		return
 	}
 
-	args := []string{"group", "add", req.Name}
-	if req.Description != "" {
-		args = append(args, "--description="+req.Description)
-	}
-
-	cmd := exec.Command("samba-tool", args...)
-	output, err := cmd.CombinedOutput()
-
+	err := h.groupService.CreateGroup(req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to create group",
-			"details": string(output),
+			"error": err.Error(),
 		})
 		return
 	}
@@ -100,13 +61,10 @@ func CreateGroup(c *gin.Context) {
 }
 
 // GetGroup returns details for a specific group
-func GetGroup(c *gin.Context) {
+func (h *GroupHandler) GetGroup(c *gin.Context) {
 	groupName := c.Param("id")
 
-	// Get group members
-	cmd := exec.Command("samba-tool", "group", "listmembers", groupName)
-	output, err := cmd.CombinedOutput()
-
+	group, err := h.groupService.GetGroup(groupName)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "Group not found",
@@ -114,39 +72,101 @@ func GetGroup(c *gin.Context) {
 		return
 	}
 
-	members := strings.Split(strings.TrimSpace(string(output)), "\n")
-
-	c.JSON(http.StatusOK, Group{
-		Name:    groupName,
-		Members: members,
-	})
+	c.JSON(http.StatusOK, group)
 }
 
 // UpdateGroup updates an existing group
-func UpdateGroup(c *gin.Context) {
-	// TODO: Implement group update logic
-	c.JSON(http.StatusNotImplemented, gin.H{
-		"message": "Group update not implemented",
+func (h *GroupHandler) UpdateGroup(c *gin.Context) {
+	groupName := c.Param("id")
+
+	var req models.UpdateGroupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid request format",
+		})
+		return
+	}
+
+	err := h.groupService.UpdateGroup(groupName, req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Group updated successfully",
+		"name":    groupName,
 	})
 }
 
 // DeleteGroup removes a group from the domain
-func DeleteGroup(c *gin.Context) {
+func (h *GroupHandler) DeleteGroup(c *gin.Context) {
 	groupName := c.Param("id")
 
-	cmd := exec.Command("samba-tool", "group", "delete", groupName)
-	output, err := cmd.CombinedOutput()
-
+	err := h.groupService.DeleteGroup(groupName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to delete group",
-			"details": string(output),
+			"error": err.Error(),
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Group deleted successfully",
+		"name":    groupName,
+	})
+}
+
+// AddGroupMembers adds members to a group
+func (h *GroupHandler) AddGroupMembers(c *gin.Context) {
+	groupName := c.Param("id")
+
+	var req models.AddGroupMembersRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid request format",
+		})
+		return
+	}
+
+	err := h.groupService.AddGroupMembers(groupName, req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Members added to group successfully",
+		"name":    groupName,
+	})
+}
+
+// RemoveGroupMembers removes members from a group
+func (h *GroupHandler) RemoveGroupMembers(c *gin.Context) {
+	groupName := c.Param("id")
+
+	var req models.RemoveGroupMembersRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid request format",
+		})
+		return
+	}
+
+	err := h.groupService.RemoveGroupMembers(groupName, req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Members removed from group successfully",
 		"name":    groupName,
 	})
 }

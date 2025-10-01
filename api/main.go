@@ -17,6 +17,13 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
+	// Initialize handlers
+	authHandler := handlers.NewAuthHandler()
+	systemHandler := handlers.NewSystemHandler()
+	userHandler := handlers.NewUserHandler()
+	groupHandler := handlers.NewGroupHandler()
+	domainHandler := handlers.NewDomainHandler()
+
 	router := gin.Default()
 
 	// CORS middleware
@@ -34,8 +41,8 @@ func main() {
 	// Public routes
 	public := router.Group("/api/v1")
 	{
-		public.POST("/auth/login", handlers.Login)
-		public.GET("/system/status", handlers.SystemStatus)
+		public.POST("/auth/login", authHandler.Login)
+		public.GET("/system/status", systemHandler.SystemStatus)
 		public.GET("/version", func(c *gin.Context) {
 			c.JSON(200, gin.H{
 				"version": Version,
@@ -51,26 +58,29 @@ func main() {
 	protected.Use(middleware.AuthRequired())
 	{
 		// Domain management
-		protected.POST("/domain/provision", handlers.ProvisionDomain)
-		protected.GET("/domain/status", handlers.DomainStatus)
-		protected.PUT("/domain/configure", handlers.ConfigureDomain)
+		protected.POST("/domain/provision", domainHandler.ProvisionDomain)
+		protected.GET("/domain/status", domainHandler.DomainStatus)
+		protected.GET("/domain/info", domainHandler.GetDomainInfo)
+		protected.PUT("/domain/configure", domainHandler.ConfigureDomain)
 
 		// User management
-		protected.GET("/users", handlers.ListUsers)
-		protected.POST("/users", handlers.CreateUser)
-		protected.GET("/users/:id", handlers.GetUser)
-		protected.PUT("/users/:id", handlers.UpdateUser)
-		protected.DELETE("/users/:id", handlers.DeleteUser)
+		protected.GET("/users", userHandler.ListUsers)
+		protected.POST("/users", userHandler.CreateUser)
+		protected.GET("/users/:id", userHandler.GetUser)
+		protected.PUT("/users/:id", userHandler.UpdateUser)
+		protected.DELETE("/users/:id", userHandler.DeleteUser)
 		protected.POST("/users/:id/reset-password", handlers.ResetUserPassword)
 		protected.POST("/users/:id/disable", handlers.DisableUser)
 		protected.POST("/users/:id/enable", handlers.EnableUser)
 
 		// Group management
-		protected.GET("/groups", handlers.ListGroups)
-		protected.POST("/groups", handlers.CreateGroup)
-		protected.GET("/groups/:id", handlers.GetGroup)
-		protected.PUT("/groups/:id", handlers.UpdateGroup)
-		protected.DELETE("/groups/:id", handlers.DeleteGroup)
+		protected.GET("/groups", groupHandler.ListGroups)
+		protected.POST("/groups", groupHandler.CreateGroup)
+		protected.GET("/groups/:id", groupHandler.GetGroup)
+		protected.PUT("/groups/:id", groupHandler.UpdateGroup)
+		protected.DELETE("/groups/:id", groupHandler.DeleteGroup)
+		protected.POST("/groups/:id/members", groupHandler.AddGroupMembers)
+		protected.DELETE("/groups/:id/members", groupHandler.RemoveGroupMembers)
 
 		// Computer/Device management
 		protected.GET("/computers", handlers.ListComputers)
@@ -91,6 +101,9 @@ func main() {
 		protected.GET("/domain/ous", handlers.GetOUList)
 		protected.POST("/domain/ous", handlers.CreateOU)
 		protected.DELETE("/domain/ous/:path", handlers.DeleteOU)
+
+		// System services
+		protected.GET("/system/services/:name", systemHandler.GetServiceStatus)
 
 		// Logs and auditing
 		protected.GET("/audit/logs", handlers.GetAuditLogs)

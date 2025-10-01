@@ -2,36 +2,40 @@ package handlers
 
 import (
 	"net/http"
-	"os/exec"
-	"runtime"
 
 	"github.com/gin-gonic/gin"
+	"github.com/vexa/api/services"
 )
 
-type SystemStatusResponse struct {
-	OS            string `json:"os"`
-	Architecture  string `json:"architecture"`
-	SambaInstalled bool  `json:"samba_installed"`
-	BindInstalled bool   `json:"bind_installed"`
-	APIVersion    string `json:"api_version"`
+// SystemHandler handles HTTP requests for system operations
+type SystemHandler struct {
+	systemService *services.SystemService
+}
+
+// NewSystemHandler creates a new SystemHandler instance
+func NewSystemHandler() *SystemHandler {
+	return &SystemHandler{
+		systemService: services.NewSystemService(),
+	}
 }
 
 // SystemStatus returns system information
-func SystemStatus(c *gin.Context) {
-	// Check if samba-tool is available
-	sambaCmd := exec.Command("which", "samba-tool")
-	sambaInstalled := sambaCmd.Run() == nil
-
-	// Check if BIND is available
-	bindCmd := exec.Command("which", "named")
-	bindInstalled := bindCmd.Run() == nil
-
-	c.JSON(http.StatusOK, SystemStatusResponse{
-		OS:            runtime.GOOS,
-		Architecture:  runtime.GOARCH,
-		SambaInstalled: sambaInstalled,
-		BindInstalled:  bindInstalled,
-		APIVersion:    "1.0.0",
-	})
+func (h *SystemHandler) SystemStatus(c *gin.Context) {
+	response := h.systemService.GetSystemStatus()
+	c.JSON(http.StatusOK, response)
 }
 
+// GetServiceStatus checks the status of a system service
+func (h *SystemHandler) GetServiceStatus(c *gin.Context) {
+	serviceName := c.Param("name")
+
+	status, err := h.systemService.GetServiceStatus(serviceName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, status)
+}
