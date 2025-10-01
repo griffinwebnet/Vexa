@@ -31,19 +31,18 @@ func main() {
 		})
 	})
 
-	// Version endpoint
-	router.GET("/version", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"version": Version,
-			"service": "vexa-api",
-		})
-	})
-
 	// Public routes
 	public := router.Group("/api/v1")
 	{
 		public.POST("/auth/login", handlers.Login)
 		public.GET("/system/status", handlers.SystemStatus)
+		public.GET("/version", func(c *gin.Context) {
+			c.JSON(200, gin.H{
+				"version": Version,
+				"service": "vexa-api",
+			})
+		})
+		public.GET("/updates/check", handlers.CheckForUpdates)
 	}
 
 	// Protected routes (require authentication)

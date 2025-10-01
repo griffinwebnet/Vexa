@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
-import { Shield, Lock, Clock, History } from 'lucide-react'
+import { Lock, Clock, History } from 'lucide-react'
 import api from '../lib/api'
 
 type PolicyPreset = 'insecure' | 'standard' | 'enhanced' | 'extreme'
@@ -70,7 +70,7 @@ export default function DomainPolicies() {
   const [expirationPreset, setExpirationPreset] = useState<PolicyPreset>('standard')
   const [historyPreset, setHistoryPreset] = useState<PolicyPreset>('standard')
 
-  const { data: policies, isLoading } = useQuery({
+  useQuery({
     queryKey: ['domainPolicies'],
     queryFn: async () => {
       const response = await api.get('/domain/policies')
@@ -161,8 +161,8 @@ export default function DomainPolicies() {
                   {passwordComplexityPresets[complexityPreset].lowercase && <li>• Requires lowercase letter</li>}
                   {passwordComplexityPresets[complexityPreset].numbers && <li>• Requires number</li>}
                   {passwordComplexityPresets[complexityPreset].symbols && <li>• Requires symbol</li>}
-                  {passwordComplexityPresets[complexityPreset].sequential === false && <li>• No sequential characters</li>}
-                  {passwordComplexityPresets[complexityPreset].noUsername && <li>• Cannot contain username parts</li>}
+                  {'sequential' in passwordComplexityPresets[complexityPreset] && (passwordComplexityPresets[complexityPreset] as any).sequential === false && <li>• No sequential characters</li>}
+                  {'noUsername' in passwordComplexityPresets[complexityPreset] && (passwordComplexityPresets[complexityPreset] as any).noUsername && <li>• Cannot contain username parts</li>}
                 </ul>
               </div>
             </div>

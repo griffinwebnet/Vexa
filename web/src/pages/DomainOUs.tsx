@@ -124,7 +124,7 @@ export default function DomainOUs() {
   }
 
   const handleCreateOU = (name: string, description: string, parentPath: string) => {
-    createOU.mutate({ name, description, parent_path: parentPath })
+    createOU.mutate({ name, description, parentPath })
   }
 
   return (

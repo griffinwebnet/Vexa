@@ -3,14 +3,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
-import { Network, Globe, Shield, Info } from 'lucide-react'
+import { Network, Globe, Shield, Info, Download, ExternalLink } from 'lucide-react'
 import api from '../lib/api'
 
 const VERSION = '0.0.1-prealpha'
 
 export default function Settings() {
   const queryClient = useQueryClient()
-  const [overlayEnabled, setOverlayEnabled] = useState(false)
   const [showHeadscaleSetup, setShowHeadscaleSetup] = useState(false)
   const [fqdn, setFqdn] = useState('')
   const [setupError, setSetupError] = useState('')
@@ -29,6 +28,15 @@ export default function Settings() {
       const response = await api.get('/version')
       return response.data
     },
+  })
+
+  const { data: updateInfo } = useQuery({
+    queryKey: ['updateCheck'],
+    queryFn: async () => {
+      const response = await api.get('/updates/check')
+      return response.data
+    },
+    refetchInterval: 1000 * 60 * 60, // Check every hour
   })
 
   const setupOverlay = useMutation({
@@ -91,6 +99,89 @@ export default function Settings() {
               </span>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Update Information */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Download className="h-5 w-5 text-primary" />
+            Updates
+          </CardTitle>
+          <CardDescription>
+            Check for available updates
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {updateInfo?.error ? (
+            <div className="p-4 rounded-lg bg-destructive/15 border border-destructive/20">
+              <div className="text-sm text-destructive">
+                Failed to check for updates: {updateInfo.error}
+              </div>
+            </div>
+          ) : updateInfo?.updateAvailable ? (
+            <div className="space-y-4">
+              <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+                <div className="flex items-center gap-2 mb-2">
+                  <Download className="h-5 w-5 text-green-600 dark:text-green-500" />
+                  <span className="font-semibold text-green-600 dark:text-green-500">
+                    Update Available
+                  </span>
+                </div>
+                <div className="text-sm space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Current Version:</span>
+                    <span className="font-mono">{updateInfo.currentVersion}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Latest Version:</span>
+                    <span className="font-mono">{updateInfo.latestVersion}</span>
+                  </div>
+                </div>
+                {updateInfo.latestRelease && (
+                  <div className="mt-3 space-y-2">
+                    <div className="text-sm font-medium">{updateInfo.latestRelease.name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      Published: {new Date(updateInfo.latestRelease.publishedAt).toLocaleDateString()}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => window.open(updateInfo.latestRelease.htmlUrl, '_blank')}
+                      >
+                        <ExternalLink className="mr-2 h-4 w-4" />
+                        View Release
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="p-4 rounded-lg bg-accent">
+                <div className="flex items-center gap-2 mb-2">
+                  <Shield className="h-5 w-5 text-green-600 dark:text-green-500" />
+                  <span className="font-semibold text-green-600 dark:text-green-500">
+                    Up to Date
+                  </span>
+                </div>
+                <div className="text-sm space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Current Version:</span>
+                    <span className="font-mono">{updateInfo?.currentVersion || VERSION}</span>
+                  </div>
+                  {updateInfo?.latestVersion && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Latest Version:</span>
+                      <span className="font-mono">{updateInfo.latestVersion}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
