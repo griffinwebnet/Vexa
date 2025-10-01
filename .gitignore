@@ -1,0 +1,61 @@
+# General
+*.log
+*.pid
+*.seed
+*.pid.lock
+.DS_Store
+
+# Vexa data directories
+/data/
+/logs/
+/var/
+
+# API (Go)
+/api/vexa-api
+/api/.env
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+
+# Frontend (Node/React)
+/web/node_modules/
+/web/dist/
+/web/.vite/
+/web/build/
+/web/.env
+/web/.env.local
+/web/.env.development.local
+/web/.env.test.local
+/web/.env.production.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.Spotlight-V100
+.Trashes
+
