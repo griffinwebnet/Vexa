@@ -9,6 +9,8 @@ import (
 	"github.com/vexa/api/middleware"
 )
 
+const Version = "0.0.1-prealpha"
+
 func main() {
 	// Set Gin mode
 	if os.Getenv("ENV") == "production" {
@@ -24,6 +26,15 @@ func main() {
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"status":  "healthy",
+			"service": "vexa-api",
+			"version": Version,
+		})
+	})
+
+	// Version endpoint
+	router.GET("/version", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"version": Version,
 			"service": "vexa-api",
 		})
 	})

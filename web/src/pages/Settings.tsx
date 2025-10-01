@@ -3,8 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
-import { Network, Globe, Shield } from 'lucide-react'
+import { Network, Globe, Shield, Info } from 'lucide-react'
 import api from '../lib/api'
+
+const VERSION = '0.0.1-prealpha'
 
 export default function Settings() {
   const queryClient = useQueryClient()
@@ -17,6 +19,14 @@ export default function Settings() {
     queryKey: ['overlayNetworking'],
     queryFn: async () => {
       const response = await api.get('/system/overlay-status')
+      return response.data
+    },
+  })
+
+  const { data: apiVersion } = useQuery({
+    queryKey: ['apiVersion'],
+    queryFn: async () => {
+      const response = await api.get('/version')
       return response.data
     },
   })
@@ -56,6 +66,33 @@ export default function Settings() {
           Configure Vexa system settings
         </p>
       </div>
+
+      {/* System Information */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Info className="h-5 w-5 text-primary" />
+            System Information
+          </CardTitle>
+          <CardDescription>
+            Version information for Vexa components
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="font-medium">Web Interface:</span>
+              <span className="text-muted-foreground font-mono">{VERSION}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="font-medium">API Server:</span>
+              <span className="text-muted-foreground font-mono">
+                {apiVersion?.version || 'Unknown'}
+              </span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Overlay Networking */}
       <Card>
