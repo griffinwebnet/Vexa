@@ -14,7 +14,7 @@ void main(List<String> arguments) async {
 
   if (results['help'] as bool || arguments.isEmpty) {
     print('Vexa CLI - Directory Services Management Tool');
-    print('Version: 0.0.2-prealpha');
+    print('Version: 0.0.4');
     print('');
     print('Usage: vexa <command>');
     print('');

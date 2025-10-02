@@ -9,7 +9,7 @@ import (
 	"github.com/vexa/api/middleware"
 )
 
-const Version = "0.0.2-prealpha"
+const Version = "0.0.4"
 
 func main() {
 	// Set Gin mode

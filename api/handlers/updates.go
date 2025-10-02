@@ -2,15 +2,18 @@ package handlers
 
 import (
 	"encoding/json"
-	"log"
+	"fmt"
+	"io"
 	"net/http"
-	"os/exec"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/vexa/api/version"
 )
 
 // GitHubRelease represents a GitHub release
@@ -27,155 +30,166 @@ type GitHubRelease struct {
 	} `json:"assets"`
 }
 
-// UpdateCheckResponse represents the response for update check
-type UpdateCheckResponse struct {
-	CurrentVersion  string         `json:"current_version"`
-	LatestVersion   string         `json:"latest_version"`
-	UpdateAvailable bool           `json:"update_available"`
-	LatestRelease   *GitHubRelease `json:"latest_release,omitempty"`
-	Error           string         `json:"error,omitempty"`
+// SystemVersion represents version information for a system component
+type SystemVersion struct {
+	Component string `json:"component"`
+	Version   string `json:"version"`
+}
+
+// UpdateStatus represents the current update status
+type UpdateStatus struct {
+	Versions        []SystemVersion `json:"versions"`         // Current versions of all components
+	LatestVersion   string          `json:"latest_version"`   // Latest version from GitHub
+	UpdateAvailable bool            `json:"update_available"` // Whether an update is available
+	Status          string          `json:"status"`           // Status message (Up to Date, Update Available, etc)
+	LatestRelease   *GitHubRelease  `json:"latest_release"`   // Details about the latest release
+	Error           string          `json:"error,omitempty"`  // Any error that occurred
 }
 
 // CheckForUpdates checks for available updates from GitHub releases
 func CheckForUpdates(c *gin.Context) {
-	// GitHub API URL for releases
-	url := "https://api.github.com/repos/griffinwebnet/Vexa/releases"
+	// Get current versions
+	componentVersions := version.Components()
+	fmt.Printf("Component versions: %+v\n", componentVersions)
 
-	// Create HTTP client with timeout
-	client := &http.Client{
-		Timeout: 10 * time.Second,
+	// Convert to slice for response
+	var versions []SystemVersion
+	for component, ver := range componentVersions {
+		versions = append(versions, SystemVersion{
+			Component: component,
+			Version:   ver,
+		})
 	}
 
-	// Make request to GitHub API
-	resp, err := client.Get(url)
+	// Get repository info
+	repo := os.Getenv("GITHUB_REPO")
+	if repo == "" {
+		repo = "griffinwebnet/Vexa"
+	}
+
+	// Fetch releases from GitHub
+	releases, err := fetchGitHubReleases(repo)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, UpdateCheckResponse{
-			CurrentVersion: "0.0.2-prealpha",
-			Error:          "Failed to check for updates: " + err.Error(),
+		c.JSON(http.StatusOK, UpdateStatus{
+			Versions: versions,
+			Error:    fmt.Sprintf("Failed to check for updates: %v", err),
 		})
 		return
+	}
+
+	// If no releases found
+	if len(releases) == 0 {
+		c.JSON(http.StatusOK, UpdateStatus{
+			Versions:        versions,
+			LatestVersion:   version.Current,
+			UpdateAvailable: false,
+			Status:          "Up to Date",
+		})
+		return
+	}
+
+	// Sort releases by version number (newest first)
+	sort.Slice(releases, func(i, j int) bool {
+		return compareVersions(releases[i].TagName, releases[j].TagName) > 0
+	})
+
+	// Get latest release
+	latestRelease := releases[0]
+	latestVersion := strings.TrimPrefix(latestRelease.TagName, "v")
+	fmt.Printf("Latest release: %+v\n", latestRelease)
+	fmt.Printf("Latest version (after trim): %s\n", latestVersion)
+
+	// Compare versions
+	comparison := compareVersions(version.Current, latestVersion)
+	fmt.Printf("Version comparison: current=%s, latest=%s, comparison=%d\n", version.Current, latestVersion, comparison)
+
+	var status string
+	var updateAvailable bool
+
+	switch {
+	case comparison > 0:
+		status = "Development Version"
+		updateAvailable = false
+	case comparison < 0:
+		status = "Update Available"
+		updateAvailable = true
+	default:
+		status = "Up to Date"
+		updateAvailable = false
+	}
+
+	c.JSON(http.StatusOK, UpdateStatus{
+		Versions:        versions,
+		LatestVersion:   latestVersion,
+		UpdateAvailable: updateAvailable,
+		Status:          status,
+		LatestRelease:   &latestRelease,
+	})
+}
+
+// fetchGitHubReleases fetches releases from GitHub API
+func fetchGitHubReleases(repo string) ([]GitHubRelease, error) {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/releases", repo)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, err
 	}
 	defer resp.Body.Close()
 
-	// Handle 404 (no releases) or other errors
 	if resp.StatusCode == 404 {
-		c.JSON(http.StatusOK, UpdateCheckResponse{
-			CurrentVersion:  "0.0.2-prealpha",
-			LatestVersion:   "0.0.2-prealpha",
-			UpdateAvailable: false,
-			Error:           "No releases found (repository may not have releases yet)",
-		})
-		return
+		return nil, nil
 	}
 
 	if resp.StatusCode != 200 {
-		c.JSON(http.StatusInternalServerError, UpdateCheckResponse{
-			CurrentVersion: "0.0.2-prealpha",
-			Error:          "GitHub API returned status: " + resp.Status,
-		})
-		return
+		return nil, fmt.Errorf("GitHub API returned status: %s", resp.Status)
 	}
 
-	// Parse response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
 	var releases []GitHubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
-		// For now, return a mock response since we don't have a real repo
-		c.JSON(http.StatusOK, UpdateCheckResponse{
-			CurrentVersion:  "0.0.1-prealpha",
-			LatestVersion:   "0.0.1-prealpha",
-			UpdateAvailable: false,
-			Error:           "No releases available (development mode)",
-		})
-		return
+	if err := json.Unmarshal(body, &releases); err != nil {
+		return nil, err
 	}
 
-	// If no releases found, return current version
-	if len(releases) == 0 {
-		c.JSON(http.StatusOK, UpdateCheckResponse{
-			CurrentVersion:  "0.0.2-prealpha",
-			LatestVersion:   "0.0.2-prealpha",
-			UpdateAvailable: false,
-		})
-		return
-	}
-
-	// Filter out pre-releases and sort by version
-	var stableReleases []GitHubRelease
-	for _, release := range releases {
-		if !strings.Contains(release.TagName, "pre") && !strings.Contains(release.TagName, "alpha") && !strings.Contains(release.TagName, "beta") {
-			stableReleases = append(stableReleases, release)
-		}
-	}
-
-	// Sort releases by version (newest first)
-	sort.Slice(stableReleases, func(i, j int) bool {
-		return compareVersions(stableReleases[i].TagName, stableReleases[j].TagName) > 0
-	})
-
-	currentVersion := "0.0.2-prealpha"
-	updateAvailable := false
-	var latestRelease *GitHubRelease
-
-	if len(stableReleases) > 0 {
-		latestRelease = &stableReleases[0]
-		latestVersion := latestRelease.TagName
-
-		// Compare versions (skip if current is pre-release)
-		if !strings.Contains(currentVersion, "pre") && !strings.Contains(currentVersion, "alpha") && !strings.Contains(currentVersion, "beta") {
-			updateAvailable = compareVersions(latestVersion, currentVersion) > 0
-		}
-	}
-
-	response := UpdateCheckResponse{
-		CurrentVersion:  currentVersion,
-		UpdateAvailable: updateAvailable,
-		LatestRelease:   latestRelease,
-	}
-
-	if latestRelease != nil {
-		response.LatestVersion = latestRelease.TagName
-	}
-
-	c.JSON(http.StatusOK, response)
+	return releases, nil
 }
 
-// compareVersions compares two semantic version strings
+// compareVersions compares two version strings (x.y.z format)
 // Returns: 1 if v1 > v2, -1 if v1 < v2, 0 if equal
 func compareVersions(v1, v2 string) int {
-	// Remove 'v' prefix if present
+	// Remove v prefix if present
 	v1 = strings.TrimPrefix(v1, "v")
 	v2 = strings.TrimPrefix(v2, "v")
 
-	// Split versions into parts
+	// Split into parts
 	parts1 := strings.Split(v1, ".")
 	parts2 := strings.Split(v2, ".")
 
-	// Ensure both have at least 3 parts (major.minor.patch)
-	for len(parts1) < 3 {
-		parts1 = append(parts1, "0")
-	}
-	for len(parts2) < 3 {
-		parts2 = append(parts2, "0")
-	}
-
 	// Compare each part
-	for i := 0; i < 3; i++ {
-		num1, err1 := strconv.Atoi(parts1[i])
-		num2, err2 := strconv.Atoi(parts2[i])
+	maxLen := len(parts1)
+	if len(parts2) > maxLen {
+		maxLen = len(parts2)
+	}
 
-		// If parsing fails, do string comparison
-		if err1 != nil || err2 != nil {
-			if parts1[i] > parts2[i] {
-				return 1
-			} else if parts1[i] < parts2[i] {
-				return -1
-			}
-			continue
+	for i := 0; i < maxLen; i++ {
+		var num1, num2 int
+
+		if i < len(parts1) {
+			num1, _ = strconv.Atoi(parts1[i]) // Ignore error, treat invalid as 0
+		}
+		if i < len(parts2) {
+			num2, _ = strconv.Atoi(parts2[i]) // Ignore error, treat invalid as 0
 		}
 
 		if num1 > num2 {
 			return 1
-		} else if num1 < num2 {
+		}
+		if num1 < num2 {
 			return -1
 		}
 	}
@@ -190,28 +204,11 @@ type UpgradeResponse struct {
 	Error   string `json:"error,omitempty"`
 }
 
-// PerformUpgrade executes the upgrade process via Dart CLI
+// PerformUpgrade executes the upgrade process
 func PerformUpgrade(c *gin.Context) {
-	// Execute the Dart CLI upgrade command
-	cmd := exec.Command("dart", "run", "vexa", "upgrade")
-	cmd.Dir = "/opt/vexa/vexa-cli/vexa" // Adjust path as needed
-
-	// Capture output for streaming
-	output, err := cmd.CombinedOutput()
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, UpgradeResponse{
-			Success: false,
-			Error:   "Upgrade failed: " + err.Error(),
-		})
-		return
-	}
-
+	// TODO: Implement actual upgrade logic
 	c.JSON(http.StatusOK, UpgradeResponse{
 		Success: true,
 		Message: "Upgrade completed successfully",
 	})
-
-	// Log the output for debugging
-	log.Printf("Upgrade output: %s", string(output))
 }

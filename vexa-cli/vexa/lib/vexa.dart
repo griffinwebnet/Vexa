@@ -9,7 +9,7 @@ Future<void> checkForUpdates() async {
   try {
     final response = await http.get(
       Uri.parse('https://api.github.com/repos/griffinwebnet/Vexa/releases'),
-      headers: {'User-Agent': 'Vexa-CLI/0.0.2-prealpha'},
+      headers: {'User-Agent': 'Vexa-CLI/0.0.4'},
     ).timeout(const Duration(seconds: 10));
 
     if (response.statusCode == 404) {
@@ -44,7 +44,7 @@ Future<void> checkForUpdates() async {
 
     final latest = stableReleases.first;
     final latestVersion = latest['tag_name'] as String;
-    final currentVersion = '0.0.2-prealpha';
+    final currentVersion = '0.0.4';
 
     print('📋 Current version: $currentVersion');
     print('📋 Latest version: $latestVersion');

@@ -5,8 +5,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Network, Globe, Shield, Info, Download, ExternalLink } from 'lucide-react'
 import api from '../lib/api'
-
-const VERSION = '0.0.2-prealpha'
+import type { UpdateInfo } from '../types/updates'
 
 export default function Settings() {
   const queryClient = useQueryClient()
@@ -22,18 +21,15 @@ export default function Settings() {
     },
   })
 
-  const { data: apiVersion } = useQuery({
-    queryKey: ['apiVersion'],
-    queryFn: async () => {
-      const response = await api.get('/version')
-      return response.data
-    },
-  })
 
-  const { data: updateInfo } = useQuery({
+  const { data: updateInfo, isLoading: isUpdateLoading } = useQuery<UpdateInfo>({
     queryKey: ['updateCheck'],
     queryFn: async () => {
       const response = await api.get('/updates/check')
+      console.log('Update check response:', response.data)
+      console.log('Latest version:', response.data?.latest_version)
+      console.log('Status:', response.data?.status)
+      console.log('Versions:', response.data?.versions)
       return response.data
     },
     refetchInterval: 1000 * 60 * 60, // Check every hour
@@ -119,108 +115,70 @@ export default function Settings() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="font-medium">Web Interface:</span>
-              <span className="text-muted-foreground font-mono">{VERSION}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="font-medium">API Server:</span>
-              <span className="text-muted-foreground font-mono">
-                {apiVersion?.version || 'Unknown'}
-              </span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Update Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Download className="h-5 w-5 text-primary" />
-            Updates
-          </CardTitle>
-          <CardDescription>
-            Check for available updates
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {updateInfo?.error ? (
-            <div className="p-4 rounded-lg bg-destructive/15 border border-destructive/20">
-              <div className="text-sm text-destructive">
-                Failed to check for updates: {updateInfo.error}
-              </div>
-            </div>
-          ) : updateInfo?.updateAvailable ? (
-            <div className="space-y-4">
-              <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
-                <div className="flex items-center gap-2 mb-2">
-                  <Download className="h-5 w-5 text-green-600 dark:text-green-500" />
-                  <span className="font-semibold text-green-600 dark:text-green-500">
-                    Update Available
-                  </span>
-                </div>
-                <div className="text-sm space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Current Version:</span>
-                    <span className="font-mono">{updateInfo.currentVersion}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Latest Version:</span>
-                    <span className="font-mono">{updateInfo.latestVersion}</span>
-                  </div>
-                </div>
-                {updateInfo.latestRelease && (
-                  <div className="mt-3 space-y-2">
-                    <div className="text-sm font-medium">{updateInfo.latestRelease.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      Published: {new Date(updateInfo.latestRelease.publishedAt).toLocaleDateString()}
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => window.open(updateInfo.latestRelease.htmlUrl, '_blank')}
-                      >
-                        <ExternalLink className="mr-2 h-4 w-4" />
-                        View Release
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={handleUpgrade}
-                        disabled={upgradeInProgress}
-                      >
-                        <Download className="mr-2 h-4 w-4" />
-                        {upgradeInProgress ? 'Upgrading...' : 'Upgrade Now'}
-                      </Button>
-                    </div>
-                  </div>
+            {/* Status Badge */}
+            <div className="p-3 rounded-lg bg-accent flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {isUpdateLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
+                    <span className="font-semibold text-muted-foreground">Checking for updates...</span>
+                  </>
+                ) : (
+                  <>
+                    <Shield className={`h-5 w-5 ${
+                      updateInfo?.error ? 'text-yellow-600 dark:text-yellow-500' :
+                      updateInfo?.status === 'Development Version' ? 'text-blue-600 dark:text-blue-500' :
+                      updateInfo?.status === 'Update Available' ? 'text-red-600 dark:text-red-500' :
+                      'text-green-600 dark:text-green-500'
+                    }`} />
+                    <span className={`font-semibold ${
+                      updateInfo?.error ? 'text-yellow-600 dark:text-yellow-500' :
+                      updateInfo?.status === 'Development Version' ? 'text-blue-600 dark:text-blue-500' :
+                      updateInfo?.status === 'Update Available' ? 'text-red-600 dark:text-red-500' :
+                      'text-green-600 dark:text-green-500'
+                    }`}>
+                      {updateInfo?.error ? 'Update Check Failed' :
+                       updateInfo?.status || 'Up to Date'}
+                    </span>
+                  </>
                 )}
               </div>
+              {updateInfo?.update_available && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleUpgrade}
+                  disabled={upgradeInProgress}
+                  className="h-7 px-2 ml-4"
+                >
+                  <Download className="h-4 w-4" />
+                  <span className="ml-1 text-xs">Update</span>
+                </Button>
+              )}
             </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="p-4 rounded-lg bg-accent">
-                <div className="flex items-center gap-2 mb-2">
-                  <Shield className="h-5 w-5 text-green-600 dark:text-green-500" />
-                  <span className="font-semibold text-green-600 dark:text-green-500">
-                    Up to Date
-                  </span>
-                </div>
-                <div className="text-sm space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Current Version:</span>
-                    <span className="font-mono">{updateInfo?.currentVersion || VERSION}</span>
+
+            {/* Version Information */}
+            <div className="space-y-2">
+              {isUpdateLoading ? (
+                <div className="text-center text-muted-foreground">Loading version information...</div>
+              ) : (
+                <>
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium">Latest Release:</span>
+                    <span className="text-muted-foreground font-mono">Version {updateInfo?.latest_version || 'Unknown'}</span>
                   </div>
-                  {updateInfo?.latestVersion && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Latest Version:</span>
-                      <span className="font-mono">{updateInfo.latestVersion}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium">Current API Version:</span>
+                    <span className="text-muted-foreground font-mono">Version {updateInfo?.versions?.find(v => v.component === 'api')?.version || 'Unknown'}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium">Current UI Version:</span>
+                    <span className="text-muted-foreground font-mono">Version {updateInfo?.versions?.find(v => v.component === 'web')?.version || 'Unknown'}</span>
+                  </div>
+                </>
+              )}
             </div>
-          )}
+          </div>
         </CardContent>
       </Card>
 
