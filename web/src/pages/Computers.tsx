@@ -1,6 +1,9 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
-import { Monitor, Wifi, Network, Circle } from 'lucide-react'
+import { Button } from '../components/ui/Button'
+import { Monitor, Wifi, Network, Circle, Plus } from 'lucide-react'
+import ComputerDeploymentModal from '../components/ComputerDeploymentModal'
 import api from '../lib/api'
 
 type ConnectionType = 'local' | 'overlay' | 'offline'
@@ -17,6 +20,8 @@ interface Computer {
 }
 
 export default function Computers() {
+  const [isDeploymentModalOpen, setIsDeploymentModalOpen] = useState(false)
+
   const { data: computersData, isLoading } = useQuery({
     queryKey: ['computers'],
     queryFn: async () => {
@@ -79,14 +84,20 @@ export default function Computers() {
             AD-compatible device enrollment
           </p>
         </div>
-        {overlayStatus?.enabled && (
-          <div className="text-sm text-muted-foreground">
-            <span className="flex items-center gap-2">
-              <Network className="h-4 w-4 text-primary" />
-              Overlay networking enabled
-            </span>
-          </div>
-        )}
+        <div className="flex items-center gap-4">
+          {overlayStatus?.enabled && (
+            <div className="text-sm text-muted-foreground">
+              <span className="flex items-center gap-2">
+                <Network className="h-4 w-4 text-primary" />
+                Overlay networking enabled
+              </span>
+            </div>
+          )}
+          <Button onClick={() => setIsDeploymentModalOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Computer
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -176,6 +187,14 @@ export default function Computers() {
           </CardContent>
         </Card>
       )}
+
+      {/* Deployment Modal */}
+      <ComputerDeploymentModal
+        isOpen={isDeploymentModalOpen}
+        onClose={() => setIsDeploymentModalOpen(false)}
+        domainName="example.local"
+        domainController="dc.example.local"
+      />
     </div>
   )
 }

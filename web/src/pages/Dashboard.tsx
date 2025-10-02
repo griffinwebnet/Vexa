@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
-import { Users, UsersRound, Monitor, Activity } from 'lucide-react'
+import { Users, UsersRound, Monitor, Activity, User, Shield, Clock } from 'lucide-react'
+import { useAuthStore } from '../stores/authStore'
 import api from '../lib/api'
 
 export default function Dashboard() {
+  const { isAdmin } = useAuthStore()
   const { data: domainStatus } = useQuery({
     queryKey: ['domainStatus'],
     queryFn: async () => {
@@ -12,24 +14,25 @@ export default function Dashboard() {
     },
   })
 
-  const stats = [
+  // Admin stats - full domain overview
+  const adminStats = [
     {
       name: 'Total Users',
-      value: '0',
+      value: '6',
       icon: Users,
       description: 'AD-compatible users',
       color: 'text-blue-500',
     },
     {
       name: 'Groups',
-      value: '0',
+      value: '7',
       icon: UsersRound,
       description: 'AD-compatible groups',
       color: 'text-green-500',
     },
     {
       name: 'Computers',
-      value: '0',
+      value: '5',
       icon: Monitor,
       description: 'AD-compatible device enrollment',
       color: 'text-purple-500',
@@ -43,12 +46,51 @@ export default function Dashboard() {
     },
   ]
 
+  // User stats - personal overview
+  const userStats = [
+    {
+      name: 'Account Status',
+      value: 'Active',
+      icon: User,
+      description: 'Your account status',
+      color: 'text-green-500',
+    },
+    {
+      name: 'Groups',
+      value: '3',
+      icon: UsersRound,
+      description: 'Groups you belong to',
+      color: 'text-blue-500',
+    },
+    {
+      name: 'Last Login',
+      value: 'Today',
+      icon: Clock,
+      description: 'Your last login time',
+      color: 'text-purple-500',
+    },
+    {
+      name: 'Security',
+      value: 'Standard',
+      icon: Shield,
+      description: 'Your security level',
+      color: 'text-orange-500',
+    },
+  ]
+
+  const stats = isAdmin ? adminStats : userStats
+
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold">Dashboard</h1>
+        <h1 className="text-3xl font-bold">
+          {isAdmin ? 'Admin Dashboard' : 'Welcome Back'}
+        </h1>
         <p className="text-muted-foreground">
-          Welcome to Vexa Directory Services
+          {isAdmin 
+            ? 'Manage your Vexa domain controller and Active Directory infrastructure'
+            : 'Manage your account and view your domain information'
+          }
         </p>
       </div>
 

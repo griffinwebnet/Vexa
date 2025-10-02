@@ -19,7 +19,7 @@ export default function DomainManagement() {
       <div>
         <h1 className="text-3xl font-bold">Domain Management</h1>
         <p className="text-muted-foreground">
-          Configure and manage your Vexa Domain
+          View and manage your Vexa Domain settings (read-only configuration)
         </p>
       </div>
 
@@ -31,7 +31,7 @@ export default function DomainManagement() {
             Domain Information
           </CardTitle>
           <CardDescription>
-            Current domain configuration and status
+            Current domain configuration and status (domain setup is done during initial wizard)
           </CardDescription>
         </CardHeader>
         <CardContent>

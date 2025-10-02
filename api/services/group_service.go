@@ -22,7 +22,7 @@ func NewGroupService() *GroupService {
 
 // ListGroups returns all groups in the domain
 func (s *GroupService) ListGroups() ([]models.Group, error) {
-	// Dev mode: Return dummy data
+	// Development mode: Return dummy data for UI testing
 	if os.Getenv("ENV") == "development" {
 		return s.getDevGroups(), nil
 	}
@@ -108,13 +108,15 @@ func (s *GroupService) RemoveGroupMembers(groupName string, req models.RemoveGro
 	return nil
 }
 
-// getDevGroups returns dummy groups for development mode
+// getDevGroups returns dummy groups for UI development
 func (s *GroupService) getDevGroups() []models.Group {
 	return []models.Group{
-		{Name: "Domain Admins", Description: "Domain administrators"},
-		{Name: "Domain Users", Description: "All domain users"},
-		{Name: "IT Staff", Description: "IT department"},
-		{Name: "Finance", Description: "Finance department"},
-		{Name: "HR", Description: "Human resources"},
+		{Name: "Domain Admins", Description: "Domain administrators", Members: []string{"administrator"}},
+		{Name: "Domain Users", Description: "All domain users", Members: []string{"jsmith", "mjohnson", "bwilliams", "administrator", "sarah.lee", "mike.chen"}},
+		{Name: "IT Staff", Description: "IT department", Members: []string{"jsmith", "administrator"}},
+		{Name: "Finance", Description: "Finance department", Members: []string{"mjohnson"}},
+		{Name: "Sales", Description: "Sales department", Members: []string{"bwilliams"}},
+		{Name: "HR", Description: "Human resources", Members: []string{"sarah.lee"}},
+		{Name: "Marketing", Description: "Marketing team", Members: []string{}},
 	}
 }

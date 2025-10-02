@@ -129,3 +129,39 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 		"username": username,
 	})
 }
+
+// DisableUser disables a user account
+func (h *UserHandler) DisableUser(c *gin.Context) {
+	username := c.Param("id")
+
+	err := h.userService.DisableUser(username)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "User disabled successfully",
+		"username": username,
+	})
+}
+
+// EnableUser enables a user account
+func (h *UserHandler) EnableUser(c *gin.Context) {
+	username := c.Param("id")
+
+	err := h.userService.EnableUser(username)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "User enabled successfully",
+		"username": username,
+	})
+}

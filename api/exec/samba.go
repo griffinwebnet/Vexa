@@ -55,6 +55,23 @@ func (s *SambaTool) UserDelete(username string) (string, error) {
 	return s.Run("user", "delete", username)
 }
 
+// UserDisable disables a user account
+func (s *SambaTool) UserDisable(username string) (string, error) {
+	return s.Run("user", "disable", username)
+}
+
+// UserEnable enables a user account
+func (s *SambaTool) UserEnable(username string) (string, error) {
+	return s.Run("user", "enable", username)
+}
+
+// DNSForwarders sets DNS forwarders for the domain
+func (s *SambaTool) DNSForwarders(forwarders []string) (string, error) {
+	args := []string{"dns", "server", "set", "forwarder"}
+	args = append(args, forwarders...)
+	return s.Run(args...)
+}
+
 // GroupCreate creates a new group
 func (s *SambaTool) GroupCreate(name string, options GroupCreateOptions) (string, error) {
 	args := []string{"group", "add", name}

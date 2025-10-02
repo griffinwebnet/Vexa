@@ -12,13 +12,12 @@ import {
   LogOut,
   Moon,
   Sun,
-  Server,
   FolderTree,
+  User,
 } from 'lucide-react'
 
-const navigation = [
+const adminNavigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'Domain Setup', href: '/setup', icon: Server },
   { name: 'Domain Management', href: '/domain', icon: FolderTree },
   { name: 'Users', href: '/users', icon: Users },
   { name: 'Groups', href: '/groups', icon: UsersRound },
@@ -27,10 +26,18 @@ const navigation = [
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 
+const userNavigation = [
+  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Self Service', href: '/self-service', icon: User },
+]
+
 export default function DashboardLayout() {
   const location = useLocation()
-  const { username, logout } = useAuthStore()
+  const { username, isAdmin, logout } = useAuthStore()
   const { theme, setTheme } = useTheme()
+  
+  // Choose navigation based on user role
+  const navigation = isAdmin ? adminNavigation : userNavigation
 
   const toggleTheme = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark')
@@ -78,7 +85,9 @@ export default function DashboardLayout() {
                 </div>
                 <div>
                   <p className="text-sm font-medium">{username}</p>
-                  <p className="text-xs text-muted-foreground">Administrator</p>
+                  <p className="text-xs text-muted-foreground">
+                    {isAdmin ? 'Administrator' : 'Domain User'}
+                  </p>
                 </div>
               </div>
               <div className="flex gap-2">

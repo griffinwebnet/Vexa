@@ -22,7 +22,7 @@ func NewUserService() *UserService {
 
 // ListUsers returns all users in the domain
 func (s *UserService) ListUsers() ([]models.User, error) {
-	// Dev mode: Return dummy data
+	// Development mode: Return dummy data for UI testing
 	if os.Getenv("ENV") == "development" {
 		return s.getDevUsers(), nil
 	}
@@ -94,9 +94,42 @@ func (s *UserService) UpdateUser(username string, req models.UpdateUserRequest) 
 
 // DeleteUser removes a user from the domain
 func (s *UserService) DeleteUser(username string) error {
+	// Development mode: Simulate deletion
+	if os.Getenv("ENV") == "development" {
+		return nil
+	}
+
 	output, err := s.sambaTool.UserDelete(username)
 	if err != nil {
 		return fmt.Errorf("failed to delete user: %s", output)
+	}
+	return nil
+}
+
+// DisableUser disables a user account
+func (s *UserService) DisableUser(username string) error {
+	// Development mode: Simulate disable
+	if os.Getenv("ENV") == "development" {
+		return nil
+	}
+
+	output, err := s.sambaTool.UserDisable(username)
+	if err != nil {
+		return fmt.Errorf("failed to disable user: %s", output)
+	}
+	return nil
+}
+
+// EnableUser enables a user account
+func (s *UserService) EnableUser(username string) error {
+	// Development mode: Simulate enable
+	if os.Getenv("ENV") == "development" {
+		return nil
+	}
+
+	output, err := s.sambaTool.UserEnable(username)
+	if err != nil {
+		return fmt.Errorf("failed to enable user: %s", output)
 	}
 	return nil
 }
@@ -110,12 +143,14 @@ func (s *UserService) addUserToGroup(username, groupName string) error {
 	return nil
 }
 
-// getDevUsers returns dummy users for development mode
+// getDevUsers returns dummy users for UI development
 func (s *UserService) getDevUsers() []models.User {
 	return []models.User{
-		{Username: "jsmith", FullName: "John Smith", Email: "jsmith@example.com", Enabled: true},
-		{Username: "mjohnson", FullName: "Mary Johnson", Email: "mjohnson@example.com", Enabled: true},
-		{Username: "bwilliams", FullName: "Bob Williams", Email: "bwilliams@example.com", Enabled: true},
-		{Username: "administrator", FullName: "Administrator", Email: "admin@example.com", Enabled: true},
+		{Username: "jsmith", FullName: "John Smith", Email: "jsmith@example.com", Enabled: true, Groups: []string{"Domain Users", "IT Staff"}},
+		{Username: "mjohnson", FullName: "Mary Johnson", Email: "mjohnson@example.com", Enabled: true, Groups: []string{"Domain Users", "Finance"}},
+		{Username: "bwilliams", FullName: "Bob Williams", Email: "bwilliams@example.com", Enabled: true, Groups: []string{"Domain Users", "Sales"}},
+		{Username: "administrator", FullName: "Administrator", Email: "admin@example.com", Enabled: true, Groups: []string{"Domain Admins", "Domain Users"}},
+		{Username: "sarah.lee", FullName: "Sarah Lee", Email: "sarah.lee@example.com", Enabled: true, Groups: []string{"Domain Users", "HR"}},
+		{Username: "mike.chen", FullName: "Mike Chen", Email: "mike.chen@example.com", Enabled: false, Groups: []string{"Domain Users"}},
 	}
 }

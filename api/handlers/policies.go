@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"os"
 	"os/exec"
 	"strconv"
 
@@ -106,55 +105,6 @@ func UpdateDomainPolicies(c *gin.Context) {
 
 // GetOUList returns list of organizational units
 func GetOUList(c *gin.Context) {
-	// Dev mode: Return dummy OU structure
-	if os.Getenv("ENV") == "development" {
-		ouStructure := map[string]interface{}{
-			"name": "example.local",
-			"path": "DC=example,DC=local",
-			"children": []map[string]interface{}{
-				{
-					"name":        "Domain Controllers",
-					"path":        "OU=Domain Controllers,DC=example,DC=local",
-					"description": "Default controllers container",
-					"children":    []interface{}{},
-				},
-				{
-					"name":        "IT Department",
-					"path":        "OU=IT,DC=example,DC=local",
-					"description": "Information Technology",
-					"children": []map[string]interface{}{
-						{
-							"name":        "Servers",
-							"path":        "OU=Servers,OU=IT,DC=example,DC=local",
-							"description": "IT Infrastructure",
-							"children":    []interface{}{},
-						},
-						{
-							"name":        "Workstations",
-							"path":        "OU=Workstations,OU=IT,DC=example,DC=local",
-							"description": "IT Staff Computers",
-							"children":    []interface{}{},
-						},
-					},
-				},
-				{
-					"name":        "Sales",
-					"path":        "OU=Sales,DC=example,DC=local",
-					"description": "Sales Department",
-					"children":    []interface{}{},
-				},
-				{
-					"name":        "Finance",
-					"path":        "OU=Finance,DC=example,DC=local",
-					"description": "Finance Department",
-					"children":    []interface{}{},
-				},
-			},
-		}
-		c.JSON(http.StatusOK, ouStructure)
-		return
-	}
-
 	cmd := exec.Command("samba-tool", "ou", "list")
 	output, err := cmd.CombinedOutput()
 

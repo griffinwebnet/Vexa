@@ -52,7 +52,7 @@ func (s *DomainService) ProvisionDomain(req models.ProvisionDomainRequest) error
 
 // GetDomainStatus returns the current status of the domain controller
 func (s *DomainService) GetDomainStatus() (*models.DomainStatusResponse, error) {
-	// Dev mode: Return dummy status
+	// Development mode: Return dummy status for UI testing
 	if os.Getenv("ENV") == "development" {
 		return &models.DomainStatusResponse{
 			Provisioned: true,

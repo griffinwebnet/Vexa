@@ -23,6 +23,7 @@ func main() {
 	userHandler := handlers.NewUserHandler()
 	groupHandler := handlers.NewGroupHandler()
 	domainHandler := handlers.NewDomainHandler()
+	computerHandler := handlers.NewComputerHandler()
 
 	router := gin.Default()
 
@@ -70,8 +71,8 @@ func main() {
 		protected.PUT("/users/:id", userHandler.UpdateUser)
 		protected.DELETE("/users/:id", userHandler.DeleteUser)
 		protected.POST("/users/:id/reset-password", handlers.ResetUserPassword)
-		protected.POST("/users/:id/disable", handlers.DisableUser)
-		protected.POST("/users/:id/enable", handlers.EnableUser)
+		protected.POST("/users/:id/disable", userHandler.DisableUser)
+		protected.POST("/users/:id/enable", userHandler.EnableUser)
 
 		// Group management
 		protected.GET("/groups", groupHandler.ListGroups)
@@ -83,11 +84,14 @@ func main() {
 		protected.DELETE("/groups/:id/members", groupHandler.RemoveGroupMembers)
 
 		// Computer/Device management
-		protected.GET("/computers", handlers.ListComputers)
-		protected.GET("/computers/:id", handlers.GetComputer)
-		protected.DELETE("/computers/:id", handlers.DeleteComputer)
+		protected.GET("/computers", computerHandler.ListComputers)
+		protected.GET("/computers/:id", computerHandler.GetComputer)
+		protected.DELETE("/computers/:id", computerHandler.DeleteComputer)
 
 		// DNS management
+		dnsHandler := handlers.NewDNSHandler()
+		protected.GET("/dns/status", dnsHandler.DNSStatus)
+		protected.PUT("/dns/forwarders", dnsHandler.UpdateDNSForwarders)
 		protected.GET("/dns/zones", handlers.ListDNSZones)
 		protected.GET("/dns/records", handlers.ListDNSRecords)
 		protected.POST("/dns/records", handlers.CreateDNSRecord)
@@ -104,6 +108,12 @@ func main() {
 
 		// System services
 		protected.GET("/system/services/:name", systemHandler.GetServiceStatus)
+
+		// Computer deployment
+		deploymentHandler := handlers.NewDeploymentHandler()
+		protected.GET("/deployment/scripts", deploymentHandler.GetDeploymentScripts)
+		protected.POST("/deployment/generate", deploymentHandler.GenerateDeploymentCommand)
+		protected.GET("/deployment/scripts/:script", deploymentHandler.ServeDeploymentScript)
 
 		// Logs and auditing
 		protected.GET("/audit/logs", handlers.GetAuditLogs)
