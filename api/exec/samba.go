@@ -137,10 +137,10 @@ func (s *SambaTool) DomainProvision(options DomainProvisionOptions) (string, err
 		args = append(args, "--option=dns forwarder = "+options.DNSForwarder)
 	}
 
-	// Workaround for Samba 4.19.5 bug: disable acl_xattr during provisioning
-	// This prevents "Security context active token stack underflow" panic
+	// Workaround for Samba 4.19.5 LXC bug: use simpler ACL backend
+	// acl_xattr crashes in LXC/Proxmox, use acl_tdb instead which stores ACLs in TDB
 	// See: https://bugzilla.samba.org/show_bug.cgi?id=15203
-	args = append(args, "--option=vfs objects = ")
+	args = append(args, "--option=vfs objects = acl_tdb")
 
 	// Run provision command
 	cmd := exec.Command("samba-tool", args...)

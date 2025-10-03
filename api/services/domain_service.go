@@ -42,12 +42,6 @@ func (s *DomainService) ProvisionDomain(req models.ProvisionDomainRequest) error
 	s.system.RemoveFile("/var/lib/samba/private/secrets.ldb")
 	s.system.RemoveFile("/var/cache/samba/gencache.tdb")
 
-	// Workaround for Samba 4.19.5 bug: temporarily disable acl_xattr VFS module
-	// See: https://bugzilla.samba.org/show_bug.cgi?id=15203
-	aclXattrPath := "/usr/lib/x86_64-linux-gnu/samba/vfs/acl_xattr.so"
-	aclXattrBackup := aclXattrPath + ".backup"
-	s.system.RunCommand("mv", aclXattrPath, aclXattrBackup)
-
 	// Generate a secure admin password
 	adminPassword := generateAdminPassword()
 
@@ -60,10 +54,6 @@ func (s *DomainService) ProvisionDomain(req models.ProvisionDomainRequest) error
 	}
 
 	output, err := s.sambaTool.DomainProvision(options)
-
-	// Restore acl_xattr module immediately after provisioning
-	s.system.RunCommand("mv", aclXattrBackup, aclXattrPath)
-
 	if err != nil {
 		return fmt.Errorf("domain provisioning failed: %s", output)
 	}
