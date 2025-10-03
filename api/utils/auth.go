@@ -28,9 +28,30 @@ func AuthenticateSAMBA(username, password string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	target := "//localhost/netlogon"
-	cmd := exec.CommandContext(ctx, "smbclient", target, "-U", username+"%"+password, "-c", "exit")
-
-	err := cmd.Run()
-	return err == nil
+	// Try multiple authentication methods for domain users
+	targets := []string{
+		"//localhost/netlogon",
+		"//localhost/ipc$",
+		"//localhost/c$",
+	}
+	
+	for _, target := range targets {
+		cmd := exec.CommandContext(ctx, "smbclient", target, "-U", username+"%"+password, "-c", "exit")
+		err := cmd.Run()
+		if err == nil {
+			return true
+		}
+	}
+	
+	// Also try with domain prefix if username doesn't already have it
+	if !strings.Contains(username, "\\") && !strings.Contains(username, "@") {
+		// Try with domain prefix
+		cmd := exec.CommandContext(ctx, "smbclient", "//localhost/netlogon", "-U", "VFW5788\\"+username+"%"+password, "-c", "exit")
+		err := cmd.Run()
+		if err == nil {
+			return true
+		}
+	}
+	
+	return false
 }

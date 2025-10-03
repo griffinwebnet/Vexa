@@ -1,6 +1,7 @@
 package services
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -59,30 +60,41 @@ func (s *AuthService) GenerateToken(username string, isAdmin bool) (*models.Logi
 
 // authenticateUser validates credentials against PAM, SAMBA, or dev mode
 func (s *AuthService) authenticateUser(username, password string) (bool, bool) {
+	fmt.Printf("DEBUG: Attempting authentication for user: %s\n", username)
+	
 	// Only allow test credentials in dev mode
 	if s.devMode {
 		// Development mode: allow test credentials
 		if username == "admin" && password == "admin" {
+			fmt.Printf("DEBUG: Dev mode authentication successful for admin\n")
 			return true, true
 		}
 		if username == "user" && password == "user" {
+			fmt.Printf("DEBUG: Dev mode authentication successful for user\n")
 			return true, false
 		}
 	}
 
 	// Production mode: Try SAMBA domain authentication first, then PAM
+	fmt.Printf("DEBUG: Trying SAMBA authentication for %s\n", username)
 	if utils.AuthenticateSAMBA(username, password) {
 		// SAMBA authentication successful
+		fmt.Printf("DEBUG: SAMBA authentication successful for %s\n", username)
 		// TODO: Check if user is in Domain Admins group for admin status
 		return true, true
 	}
+	fmt.Printf("DEBUG: SAMBA authentication failed for %s\n", username)
 
+	fmt.Printf("DEBUG: Trying PAM authentication for %s\n", username)
 	if utils.AuthenticatePAM(username, password) {
 		// PAM authentication successful for system users
+		fmt.Printf("DEBUG: PAM authentication successful for %s\n", username)
 		// TODO: Implement proper admin group checking for PAM users
 		return true, true
 	}
+	fmt.Printf("DEBUG: PAM authentication failed for %s\n", username)
 
 	// Authentication failed
+	fmt.Printf("DEBUG: All authentication methods failed for %s\n", username)
 	return false, false
 }

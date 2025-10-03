@@ -19,8 +19,11 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       login: (token, username, isAdmin) =>
         set({ token, username, isAdmin, isAuthenticated: true }),
-      logout: () =>
-        set({ token: null, username: null, isAdmin: false, isAuthenticated: false }),
+      logout: () => {
+        set({ token: null, username: null, isAdmin: false, isAuthenticated: false })
+        // Force redirect to login page
+        window.location.href = '/login'
+      },
     }),
     {
       name: 'vexa-auth',
