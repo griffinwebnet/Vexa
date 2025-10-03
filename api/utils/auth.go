@@ -34,7 +34,7 @@ func AuthenticateSAMBA(username, password string) bool {
 		"//localhost/ipc$",
 		"//localhost/c$",
 	}
-	
+
 	for _, target := range targets {
 		cmd := exec.CommandContext(ctx, "smbclient", target, "-U", username+"%"+password, "-c", "exit")
 		err := cmd.Run()
@@ -42,7 +42,7 @@ func AuthenticateSAMBA(username, password string) bool {
 			return true
 		}
 	}
-	
+
 	// Also try with domain prefix if username doesn't already have it
 	if !strings.Contains(username, "\\") && !strings.Contains(username, "@") {
 		// Try with domain prefix
@@ -52,6 +52,6 @@ func AuthenticateSAMBA(username, password string) bool {
 			return true
 		}
 	}
-	
+
 	return false
 }

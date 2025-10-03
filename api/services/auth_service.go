@@ -61,7 +61,7 @@ func (s *AuthService) GenerateToken(username string, isAdmin bool) (*models.Logi
 // authenticateUser validates credentials against PAM, SAMBA, or dev mode
 func (s *AuthService) authenticateUser(username, password string) (bool, bool) {
 	fmt.Printf("DEBUG: Attempting authentication for user: %s\n", username)
-	
+
 	// Only allow test credentials in dev mode
 	if s.devMode {
 		// Development mode: allow test credentials

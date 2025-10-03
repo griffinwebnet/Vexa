@@ -18,6 +18,9 @@ export default function SetupWizard() {
   const [domainName, setDomainName] = useState('')
   const [provisioningState, setProvisioningState] = useState<'idle' | 'provisioning' | 'success' | 'error'>('idle')
   
+  // Debug provisioning state changes
+  console.log('Current provisioning state:', provisioningState)
+  
   const [formData, setFormData] = useState({
     realm: '',
     dnsProvider: 'cloudflare',
@@ -142,12 +145,14 @@ export default function SetupWizard() {
                     setCurrentStatus(content)
                   }
                 } else if (data.type === 'complete') {
-                  console.log('Domain provisioning completed!') // Console logging for debugging
+                  console.log('=== COMPLETE EVENT RECEIVED ===') // Console logging for debugging
+                  console.log('Setting provisioning state to success')
                   setCurrentStatus('Domain provisioning completed successfully!')
                   setProvisioningState('success')
                   
                   // Auto-redirect after 3 seconds
                   setTimeout(() => {
+                    console.log('Auto-redirecting to dashboard')
                     localStorage.setItem('vexa-setup-complete', 'true')
                     queryClient.invalidateQueries({ queryKey: ['domainStatus'] })
                     window.location.href = '/'
