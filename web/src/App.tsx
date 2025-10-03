@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from './stores/authStore'
 import { ThemeProvider } from './components/ThemeProvider'
 import LoginPage from './pages/LoginPage'
@@ -14,6 +15,7 @@ import DomainManagement from './pages/DomainManagement'
 import DomainOUs from './pages/DomainOUs'
 import DomainPolicies from './pages/DomainPolicies'
 import SelfService from './pages/SelfService'
+import api from './lib/api'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
@@ -23,8 +25,29 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" />
   }
   
-  if (!setupComplete && window.location.pathname !== '/wizard') {
+  // Check actual domain status from API
+  const { data: domainStatus } = useQuery({
+    queryKey: ['domainStatus'],
+    queryFn: async () => {
+      try {
+        const response = await api.get('/domain/status')
+        return response.data
+      } catch (error) {
+        return { provisioned: false }
+      }
+    },
+    enabled: isAuthenticated,
+    retry: false
+  })
+  
+  // If domain is not provisioned, force wizard
+  if (!domainStatus?.provisioned && window.location.pathname !== '/wizard') {
     return <Navigate to="/wizard" />
+  }
+  
+  // If domain is provisioned, prevent access to wizard
+  if (domainStatus?.provisioned && window.location.pathname === '/wizard') {
+    return <Navigate to="/" />
   }
   
   return <>{children}</>

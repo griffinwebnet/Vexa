@@ -3,7 +3,7 @@ set -e
 
 # Vexa Update Script
 echo "======================================"
-echo "  Vexa Update Script  v0.1.31"
+echo "  Vexa Update Script  v0.1.32"
 echo "======================================"
 echo ""
 
@@ -55,15 +55,18 @@ if [ "$NIGHTLY" = true ]; then
     echo "Updating to nightly build: $CURRENT_VERSION"
 else
     echo -e "${YELLOW}Fetching latest release...${NC}"
-    LATEST_RELEASE=$(curl -s https://api.github.com/repos/griffinwebnet/Vexa/releases/latest | jq -r '.tag_name')
     
-    if [ -z "$LATEST_RELEASE" ] || [ "$LATEST_RELEASE" = "null" ]; then
+    # Check if releases exist first
+    RELEASE_COUNT=$(curl -s https://api.github.com/repos/griffinwebnet/Vexa/releases | jq length)
+    
+    if [ -z "$RELEASE_COUNT" ] || [ "$RELEASE_COUNT" = "0" ] || [ "$RELEASE_COUNT" = "null" ]; then
         echo -e "${YELLOW}No releases found, falling back to main branch...${NC}"
         git clone https://github.com/griffinwebnet/Vexa.git
         cd Vexa
         git checkout master 2>/dev/null || git checkout main 2>/dev/null || true
         CURRENT_VERSION="main-$(git rev-parse --short HEAD)"
     else
+        LATEST_RELEASE=$(curl -s https://api.github.com/repos/griffinwebnet/Vexa/releases/latest | jq -r '.tag_name')
         echo "Latest release: $LATEST_RELEASE"
         git clone --branch "$LATEST_RELEASE" --depth 1 https://github.com/griffinwebnet/Vexa.git
         cd Vexa
