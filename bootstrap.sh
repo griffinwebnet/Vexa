@@ -57,9 +57,14 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
 echo -e "${YELLOW}Installing Samba 4.15 from Ubuntu 22.04 (fixes LXC provisioning bug)...${NC}"
 
 cd /tmp
+rm -rf samba_debs 2>/dev/null || true
+mkdir -p samba_debs
+cd samba_debs
+
 SAMBA_VERSION="4.15.13+dfsg-0ubuntu1.6"
 
 # Download Samba 4.15 packages from Jammy
+echo -e "${YELLOW}Downloading Samba 4.15 packages...${NC}"
 wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/samba_${SAMBA_VERSION}_amd64.deb
 wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/samba-common_${SAMBA_VERSION}_all.deb
 wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/samba-common-bin_${SAMBA_VERSION}_amd64.deb
@@ -68,17 +73,30 @@ wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/samba-libs_${SAMBA_VE
 wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/winbind_${SAMBA_VERSION}_amd64.deb
 wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/libwbclient0_${SAMBA_VERSION}_amd64.deb
 
-# Install the downgraded packages
-DEBIAN_FRONTEND=noninteractive dpkg -i *.deb 2>/dev/null || true
+# Stop any running Samba services
+systemctl stop samba-ad-dc 2>/dev/null || true
+systemctl stop smbd nmbd winbind 2>/dev/null || true
+
+# Force install the downgraded packages
+echo -e "${YELLOW}Installing Samba 4.15...${NC}"
+DEBIAN_FRONTEND=noninteractive dpkg --force-downgrade --force-depends -i *.deb
 DEBIAN_FRONTEND=noninteractive apt-get install -f -y
 
 # Hold Samba packages to prevent upgrade
+echo -e "${YELLOW}Holding Samba packages...${NC}"
 apt-mark hold samba samba-dsdb-modules samba-common samba-common-bin samba-libs winbind libwbclient0
 
 # Cleanup
-rm -f *.deb
+cd /tmp
+rm -rf samba_debs
 
-echo -e "${GREEN}Packages installed (Samba $(samba --version | cut -d' ' -f2))${NC}"
+INSTALLED_VERSION=$(dpkg -l | grep "^ii  samba " | awk '{print $3}')
+echo -e "${GREEN}Samba installed: $INSTALLED_VERSION${NC}"
+
+if [[ ! "$INSTALLED_VERSION" == *"4.15"* ]]; then
+    echo -e "${RED}ERROR: Samba 4.15 installation failed!${NC}"
+    exit 1
+fi
 
 # Fetch Vexa source
 cd /tmp
