@@ -131,6 +131,7 @@ func (s *SambaTool) DomainProvision(options DomainProvisionOptions) (string, err
 		"--server-role=dc",
 		"--dns-backend=" + options.DNSBackend,
 		"--use-rfc2307",
+		"--use-xattrs=no", // Workaround for security context stack underflow bug
 	}
 
 	if options.DNSForwarder != "" {
