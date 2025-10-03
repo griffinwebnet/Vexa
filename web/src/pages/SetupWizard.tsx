@@ -1,24 +1,23 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
-import { Server, GitMerge, Plus, Copy, Terminal } from 'lucide-react'
+import { Server, GitMerge, Plus, Loader2, CheckCircle, AlertCircle } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 
 type SetupMode = 'new' | 'join' | 'migrate' | null
 
 export default function SetupWizard() {
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { token, isAuthenticated } = useAuthStore()
   const [mode, setMode] = useState<SetupMode>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [cliOutput, setCliOutput] = useState<string[]>([])
-  const [showOutput, setShowOutput] = useState(false)
-  const outputRef = useRef<HTMLDivElement>(null)
+  const [currentStatus, setCurrentStatus] = useState('')
+  const [domainName, setDomainName] = useState('')
+  const [provisioningState, setProvisioningState] = useState<'idle' | 'provisioning' | 'success' | 'error'>('idle')
   
   const [formData, setFormData] = useState({
     realm: '',
@@ -43,8 +42,8 @@ export default function SetupWizard() {
   const handleSetupNew = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    setCliOutput([])
-    setShowOutput(true)
+    setProvisioningState('provisioning')
+    setCurrentStatus('Starting domain provisioning...')
 
     if (!formData.realm.trim()) {
       setError('Realm is required')
@@ -60,21 +59,13 @@ export default function SetupWizard() {
         dnsServers = provider?.servers || '1.1.1.1,1.0.0.1'
       }
 
-      const domainName = getDomainFromRealm(formData.realm)
+      const domain = getDomainFromRealm(formData.realm)
+      setDomainName(domain)
       
       // Check authentication
-      console.log('Starting domain provisioning with:', {
-        domain: domainName,
-        realm: formData.realm,
-        dns_forwarder: dnsServers,
-        isAuthenticated,
-        hasToken: !!token,
-        tokenLength: token ? token.length : 0
-      })
-      
       if (!isAuthenticated || !token) {
-        console.error('No authentication found - isAuthenticated:', isAuthenticated, 'hasToken:', !!token)
         setError('Authentication required. Please log in again.')
+        setProvisioningState('error')
         return
       }
       
@@ -86,22 +77,19 @@ export default function SetupWizard() {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          domain: domainName,
+          domain: domain,
           realm: formData.realm,
           dns_forwarder: dnsServers,
         })
       })
-
-      console.log('Response status:', response.status, response.statusText)
       
       if (!response.ok) {
         const errorText = await response.text()
-        console.error('API Error Response:', errorText)
         
         if (response.status === 401) {
-          console.error('Authentication failed - token may be expired')
-          useAuthStore.getState().logout() // Clear invalid token using auth store
+          useAuthStore.getState().logout()
           setError('Authentication expired. Please refresh the page and log in again.')
+          setProvisioningState('error')
           return
         }
         
@@ -117,54 +105,48 @@ export default function SetupWizard() {
           if (done) break
 
           const chunk = decoder.decode(value)
-          console.log('Received chunk:', chunk)
           const lines = chunk.split('\n')
           
           for (const line of lines) {
             if (line.startsWith('data: ')) {
               try {
                 const data = JSON.parse(line.slice(6))
-                console.log('Parsed SSE data:', data)
                 if (data.type === 'output') {
-                  setCliOutput(prev => [...prev, data.content])
-                  // Auto-scroll to bottom
-                  setTimeout(() => {
-                    if (outputRef.current) {
-                      outputRef.current.scrollTop = outputRef.current.scrollHeight
-                    }
-                  }, 100)
+                  // Filter and format status messages
+                  const content = data.content
+                  if (!content.startsWith('STDOUT:') && !content.startsWith('STDERR:') && !content.startsWith('ERROR:')) {
+                    setCurrentStatus(content)
+                  } else if (content.startsWith('ERROR:')) {
+                    setError(content.replace('ERROR: ', ''))
+                    setProvisioningState('error')
+                    return
+                  }
                 } else if (data.type === 'complete') {
-                  console.log('Provisioning completed successfully')
-                  localStorage.setItem('vexa-setup-complete', 'true')
-                  // Invalidate domain status query to refresh data
-                  queryClient.invalidateQueries({ queryKey: ['domainStatus'] })
-                  // Force refresh the page to reload domain status
-                  window.location.href = '/'
+                  setCurrentStatus('Domain provisioning completed successfully!')
+                  setProvisioningState('success')
+                  
+                  // Auto-redirect after 3 seconds
+                  setTimeout(() => {
+                    localStorage.setItem('vexa-setup-complete', 'true')
+                    queryClient.invalidateQueries({ queryKey: ['domainStatus'] })
+                    window.location.href = '/'
+                  }, 3000)
                 }
               } catch (e) {
-                console.error('Error parsing SSE data:', e, 'Line:', line)
+                // Ignore parsing errors
               }
             }
           }
         }
       }
     } catch (err: any) {
-      console.error('Domain provisioning error:', err)
       setError(err.message || 'Failed to provision domain')
-      setCliOutput(prev => [...prev, `ERROR: ${err.message || 'Unknown error'}`])
+      setProvisioningState('error')
     } finally {
       setLoading(false)
     }
   }
 
-  const copyOutputToClipboard = () => {
-    const outputText = cliOutput.join('\n')
-    navigator.clipboard.writeText(outputText).then(() => {
-      // Could add a toast notification here
-    }).catch(err => {
-      console.error('Failed to copy to clipboard:', err)
-    })
-  }
 
   if (!mode) {
     return (
@@ -239,6 +221,89 @@ export default function SetupWizard() {
   }
 
   if (mode === 'new') {
+    // Show provisioning progress interface
+    if (provisioningState !== 'idle') {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-background p-8">
+          <Card className="w-full max-w-2xl">
+            <CardHeader className="text-center">
+              <CardTitle>Domain Setup</CardTitle>
+              <CardDescription>
+                {domainName && `Domain Name: ${domainName}`}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="text-center space-y-6">
+              {/* Progress Indicator */}
+              <div className="flex justify-center">
+                {provisioningState === 'provisioning' && (
+                  <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                )}
+                {provisioningState === 'success' && (
+                  <CheckCircle className="h-12 w-12 text-green-500" />
+                )}
+                {provisioningState === 'error' && (
+                  <AlertCircle className="h-12 w-12 text-red-500" />
+                )}
+              </div>
+
+              {/* Status Message */}
+              <div className="space-y-4">
+                {provisioningState === 'provisioning' && (
+                  <div>
+                    <p className="text-lg font-medium">Provisioning Domain...</p>
+                    <p className="text-sm text-muted-foreground">{currentStatus}</p>
+                  </div>
+                )}
+
+                {provisioningState === 'success' && (
+                  <div>
+                    <p className="text-lg font-medium text-green-600">Welcome to {domainName}!</p>
+                    <p className="text-sm text-muted-foreground">Redirecting to dashboard...</p>
+                  </div>
+                )}
+
+                {provisioningState === 'error' && (
+                  <div>
+                    <p className="text-lg font-medium text-red-600">Setup Failed</p>
+                    <p className="text-sm text-muted-foreground">{error}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-center">
+                {provisioningState === 'error' && (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setProvisioningState('idle')
+                      setError('')
+                      setCurrentStatus('')
+                    }}
+                  >
+                    Back to Setup
+                  </Button>
+                )}
+                
+                {provisioningState === 'success' && (
+                  <Button 
+                    onClick={() => {
+                      localStorage.setItem('vexa-setup-complete', 'true')
+                      queryClient.invalidateQueries({ queryKey: ['domainStatus'] })
+                      window.location.href = '/'
+                    }}
+                  >
+                    Go to Dashboard
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )
+    }
+
+    // Show setup form
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-background p-8">
         <Card className="w-full max-w-2xl">
@@ -322,49 +387,6 @@ export default function SetupWizard() {
                 </div>
               )}
 
-              {showOutput && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium flex items-center gap-2">
-                      <Terminal className="h-4 w-4" />
-                      CLI Output
-                    </label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={copyOutputToClipboard}
-                      className="flex items-center gap-2"
-                    >
-                      <Copy className="h-4 w-4" />
-                      Copy
-                    </Button>
-                  </div>
-                  <div
-                    ref={outputRef}
-                    className="bg-black text-green-400 p-4 rounded-md font-mono text-sm h-64 overflow-y-auto border"
-                  >
-                    {cliOutput.length === 0 ? (
-                      <div className="text-gray-500">Waiting for output...</div>
-                    ) : (
-                      cliOutput.map((line, index) => (
-                        <div key={index} className="mb-1">
-                          {line.startsWith('ERROR:') ? (
-                            <span className="text-red-400">{line}</span>
-                          ) : line.startsWith('STDOUT:') ? (
-                            <span className="text-green-400">{line}</span>
-                          ) : line.startsWith('STDERR:') ? (
-                            <span className="text-yellow-400">{line}</span>
-                          ) : (
-                            <span>{line}</span>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-
               <div className="flex gap-2 pt-4">
                 <Button type="button" variant="outline" onClick={() => setMode(null)}>
                   Back
@@ -372,21 +394,6 @@ export default function SetupWizard() {
                 <Button type="submit" className="flex-1" disabled={loading}>
                   {loading ? 'Provisioning...' : 'Provision Domain'}
                 </Button>
-                {!loading && showOutput && cliOutput.length > 0 && (
-                  <Button 
-                    type="button" 
-                    onClick={() => {
-                      localStorage.setItem('vexa-setup-complete', 'true')
-                      // Invalidate domain status query to refresh data
-                      queryClient.invalidateQueries({ queryKey: ['domainStatus'] })
-                      // Force refresh the page to reload domain status
-                      window.location.href = '/'
-                    }}
-                    className="flex-1"
-                  >
-                    Continue to Dashboard
-                  </Button>
-                )}
               </div>
             </form>
           </CardContent>
