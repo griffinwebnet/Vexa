@@ -48,6 +48,8 @@ export default function SetupWizard() {
       setError('Realm is required')
       return
     }
+    
+    console.log('=== DOMAIN PROVISIONING START ===')
 
     setLoading(true)
     try {
@@ -82,6 +84,8 @@ export default function SetupWizard() {
         })
       })
       
+      console.log('Response status:', response.status, response.statusText)
+      
       if (!response.ok) {
         if (response.status === 401) {
           useAuthStore.getState().logout()
@@ -102,15 +106,20 @@ export default function SetupWizard() {
           if (done) break
 
           const chunk = decoder.decode(value)
+          console.log('Received chunk:', chunk) // Console logging for debugging
           const lines = chunk.split('\n')
           
           for (const line of lines) {
             if (line.startsWith('data: ')) {
               try {
                 const data = JSON.parse(line.slice(6))
+                console.log('Parsed SSE data:', data) // Console logging for debugging
+                
                 if (data.type === 'output') {
-                  // Filter and format status messages
                   const content = data.content
+                  console.log('SSE Output:', content) // Console logging for debugging
+                  
+                  // Filter and format status messages for UI
                   if (!content.startsWith('STDOUT:') && !content.startsWith('STDERR:') && !content.startsWith('ERROR:')) {
                     setCurrentStatus(content)
                   } else if (content.startsWith('ERROR:')) {
@@ -119,6 +128,7 @@ export default function SetupWizard() {
                     return
                   }
                 } else if (data.type === 'complete') {
+                  console.log('Domain provisioning completed!') // Console logging for debugging
                   setCurrentStatus('Domain provisioning completed successfully!')
                   setProvisioningState('success')
                   
@@ -130,17 +140,19 @@ export default function SetupWizard() {
                   }, 3000)
                 }
               } catch (e) {
-                // Ignore parsing errors
+                console.error('Failed to parse SSE data:', e)
               }
             }
           }
         }
       }
     } catch (err: any) {
+      console.error('Domain provisioning error:', err)
       setError(err.message || 'Failed to provision domain')
       setProvisioningState('error')
     } finally {
       setLoading(false)
+      console.log('=== DOMAIN PROVISIONING END ===')
     }
   }
 

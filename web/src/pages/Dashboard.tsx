@@ -168,7 +168,7 @@ export default function Dashboard() {
                 No domain has been provisioned yet
               </p>
               <a
-                href="/setup"
+                href="/wizard"
                 className="text-primary hover:underline font-medium"
               >
                 Set up your domain →

@@ -19,7 +19,6 @@ import api from './lib/api'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
-  const setupComplete = localStorage.getItem('vexa-setup-complete')
   
   if (!isAuthenticated) {
     return <Navigate to="/login" />

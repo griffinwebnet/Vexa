@@ -67,7 +67,7 @@ export default function DomainManagement() {
               <p className="text-muted-foreground mb-4">
                 No domain has been provisioned yet
               </p>
-              <Link to="/setup">
+              <Link to="/wizard">
                 <Button>Provision Domain</Button>
               </Link>
             </div>
