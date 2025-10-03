@@ -3,7 +3,6 @@ package exec
 import (
 	"os/exec"
 	"strings"
-	"syscall"
 )
 
 // SambaTool provides an interface for executing samba-tool commands
@@ -138,12 +137,14 @@ func (s *SambaTool) DomainProvision(options DomainProvisionOptions) (string, err
 		args = append(args, "--option=dns forwarder = "+options.DNSForwarder)
 	}
 
-	// Run with clean environment to avoid permission issues that trigger security context bugs
+	// Workaround for Samba 4.19.5 bug: disable acl_xattr during provisioning
+	// This prevents "Security context active token stack underflow" panic
+	// See: https://bugzilla.samba.org/show_bug.cgi?id=15203
+	args = append(args, "--option=vfs objects = ")
+
+	// Run provision command
 	cmd := exec.Command("samba-tool", args...)
-	// Set umask before running (Linux-specific workaround for security context bug)
-	oldMask := syscall.Umask(0022)
 	output, err := cmd.CombinedOutput()
-	syscall.Umask(oldMask) // Restore original umask
 	return string(output), err
 }
 
