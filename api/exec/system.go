@@ -53,3 +53,9 @@ func (s *System) RemoveFile(path string) error {
 	cmd := exec.Command("rm", "-f", path)
 	return cmd.Run()
 }
+
+// RunCommand executes a command with arguments
+func (s *System) RunCommand(name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	return cmd.Run()
+}
