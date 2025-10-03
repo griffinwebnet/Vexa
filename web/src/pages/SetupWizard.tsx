@@ -128,24 +128,26 @@ export default function SetupWizard() {
                     setProvisioningState('error')
                     return
                   } else if (
-                    // Show key status messages
-                    content.includes('Starting domain provisioning') ||
-                    content.includes('Checking if samba-tool is available') ||
-                    content.includes('samba-tool is available') ||
-                    content.includes('Cleaning up existing Samba configuration') ||
-                    content.includes('Stopping conflicting services') ||
-                    content.includes('Generating admin password') ||
-                    content.includes('Starting domain provision command') ||
-                    content.includes('Domain provisioning completed successfully') ||
-                    content.includes('Creating default groups') ||
-                    content.includes('Starting Samba AD DC service') ||
-                    content.includes('Samba AD DC service started successfully') ||
-                    content.includes('Domain provisioning completed!')
+                    // Show key status messages - be more specific with exact matches
+                    content === 'Starting domain provisioning...' ||
+                    content === 'Checking if samba-tool is available...' ||
+                    content === 'samba-tool is available' ||
+                    content === 'Cleaning up existing Samba configuration...' ||
+                    content === 'Stopping conflicting services...' ||
+                    content === 'Generating admin password...' ||
+                    content === 'Starting domain provision command...' ||
+                    content === 'Domain provisioning completed successfully' ||
+                    content === 'Creating default groups...' ||
+                    content === 'Starting Samba AD DC service...' ||
+                    content === 'Samba AD DC service started successfully' ||
+                    content === 'Domain provisioning completed!'
                   ) {
+                    console.log('Updating status to:', content)
                     setCurrentStatus(content)
                   }
                 } else if (data.type === 'complete') {
                   console.log('=== COMPLETE EVENT RECEIVED ===') // Console logging for debugging
+                  console.log('Complete event data:', data)
                   console.log('Setting provisioning state to success')
                   setCurrentStatus('Domain provisioning completed successfully!')
                   setProvisioningState('success')
@@ -154,9 +156,16 @@ export default function SetupWizard() {
                   setTimeout(() => {
                     console.log('Auto-redirecting to dashboard')
                     localStorage.setItem('vexa-setup-complete', 'true')
+                    // Store domain info for immediate display
+                    localStorage.setItem('vexa-domain-info', JSON.stringify({
+                      domain: domainName,
+                      realm: formData.realm
+                    }))
                     queryClient.invalidateQueries({ queryKey: ['domainStatus'] })
                     window.location.href = '/'
                   }, 3000)
+                } else {
+                  console.log('Unknown event type:', data.type, 'Data:', data)
                 }
               } catch (e) {
                 console.error('Failed to parse SSE data:', e)
@@ -317,6 +326,11 @@ export default function SetupWizard() {
                   <Button 
                     onClick={() => {
                       localStorage.setItem('vexa-setup-complete', 'true')
+                      // Store domain info for immediate display
+                      localStorage.setItem('vexa-domain-info', JSON.stringify({
+                        domain: domainName,
+                        realm: formData.realm
+                      }))
                       queryClient.invalidateQueries({ queryKey: ['domainStatus'] })
                       window.location.href = '/'
                     }}

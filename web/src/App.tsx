@@ -16,6 +16,7 @@ import DomainOUs from './pages/DomainOUs'
 import DomainPolicies from './pages/DomainPolicies'
 import SelfService from './pages/SelfService'
 import api from './lib/api'
+import { getDomainInfoFromStorage } from './utils/domainUtils'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
@@ -25,19 +26,46 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   }
   
   // Check actual domain status from API
-  const { data: domainStatus } = useQuery({
+  const { data: domainStatus, isLoading } = useQuery({
     queryKey: ['domainStatus'],
     queryFn: async () => {
       try {
         const response = await api.get('/domain/status')
-        return response.data
+        const apiData = response.data
+        
+        // If API returns PROVISIONED but we have stored domain info, use that
+        if (apiData.provisioned && (apiData.domain === 'PROVISIONED' || apiData.realm === 'PROVISIONED')) {
+          const storedInfo = getDomainInfoFromStorage()
+          if (storedInfo) {
+            return {
+              ...apiData,
+              domain: storedInfo.domain,
+              realm: storedInfo.realm
+            }
+          }
+        }
+        
+        return apiData
       } catch (error) {
         return { provisioned: false }
       }
     },
     enabled: isAuthenticated,
-    retry: false
+    retry: false,
+    staleTime: 30000, // Cache for 30 seconds to prevent excessive API calls
   })
+  
+  // Show loading state while checking domain status
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-background">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    )
+  }
   
   // If domain is not provisioned, force wizard
   if (!domainStatus?.provisioned && window.location.pathname !== '/wizard') {
