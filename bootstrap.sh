@@ -3,7 +3,7 @@ set -e
 
 # Vexa Bootstrap Script
 echo "======================================"
-echo "  Vexa Bootstrap Installer  v0.1.22"
+echo "  Vexa Bootstrap Installer  v0.1.23"
 echo "======================================"
 echo ""
 
@@ -143,6 +143,7 @@ echo -e "${GREEN}API built${NC}"
     # Build React frontend
 echo -e "${YELLOW}Building web interface...${NC}"
 cd /var/www/vexa/web
+    npm cache clean --force
     npm install
     npm run build
 echo -e "${GREEN}Frontend built${NC}"
