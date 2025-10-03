@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -10,6 +11,7 @@ type SetupMode = 'new' | 'join' | 'migrate' | null
 
 export default function SetupWizard() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { token, isAuthenticated } = useAuthStore()
   const [mode, setMode] = useState<SetupMode>(null)
   const [loading, setLoading] = useState(false)
@@ -134,7 +136,10 @@ export default function SetupWizard() {
                 } else if (data.type === 'complete') {
                   console.log('Provisioning completed successfully')
                   localStorage.setItem('vexa-setup-complete', 'true')
-                  navigate('/')
+                  // Invalidate domain status query to refresh data
+                  queryClient.invalidateQueries({ queryKey: ['domainStatus'] })
+                  // Force refresh the page to reload domain status
+                  window.location.href = '/'
                 }
               } catch (e) {
                 console.error('Error parsing SSE data:', e, 'Line:', line)
@@ -372,7 +377,10 @@ export default function SetupWizard() {
                     type="button" 
                     onClick={() => {
                       localStorage.setItem('vexa-setup-complete', 'true')
-                      navigate('/')
+                      // Invalidate domain status query to refresh data
+                      queryClient.invalidateQueries({ queryKey: ['domainStatus'] })
+                      // Force refresh the page to reload domain status
+                      window.location.href = '/'
                     }}
                     className="flex-1"
                   >

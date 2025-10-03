@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/vexa/api/exec"
@@ -89,9 +90,35 @@ func (s *DomainService) GetDomainStatus() (*models.DomainStatusResponse, error) 
 	}
 
 	if provisioned {
-		// TODO: Parse domain info from output
-		response.Domain = "UNKNOWN"
-		response.Realm = "UNKNOWN"
+		// Parse domain info from samba-tool domain info output
+		output, err := s.sambaTool.DomainInfo("127.0.0.1")
+		if err == nil {
+			// Parse domain and realm from output
+			lines := strings.Split(output, "\n")
+			for _, line := range lines {
+				line = strings.TrimSpace(line)
+				if strings.Contains(line, "Domain:") {
+					parts := strings.Split(line, ":")
+					if len(parts) > 1 {
+						response.Domain = strings.TrimSpace(parts[1])
+					}
+				}
+				if strings.Contains(line, "Realm:") {
+					parts := strings.Split(line, ":")
+					if len(parts) > 1 {
+						response.Realm = strings.TrimSpace(parts[1])
+					}
+				}
+			}
+		}
+
+		// Fallback values if parsing failed
+		if response.Domain == "" {
+			response.Domain = "PROVISIONED"
+		}
+		if response.Realm == "" {
+			response.Realm = "PROVISIONED"
+		}
 	}
 
 	return response, nil
