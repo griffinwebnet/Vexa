@@ -4,11 +4,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Server, GitMerge, Plus, Copy, Terminal } from 'lucide-react'
+import { useAuthStore } from '../stores/authStore'
 
 type SetupMode = 'new' | 'join' | 'migrate' | null
 
 export default function SetupWizard() {
   const navigate = useNavigate()
+  const { token, isAuthenticated } = useAuthStore()
   const [mode, setMode] = useState<SetupMode>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -58,18 +60,18 @@ export default function SetupWizard() {
 
       const domainName = getDomainFromRealm(formData.realm)
       
-      // Check authentication token
-      const token = localStorage.getItem('token')
+      // Check authentication
       console.log('Starting domain provisioning with:', {
         domain: domainName,
         realm: formData.realm,
         dns_forwarder: dnsServers,
+        isAuthenticated,
         hasToken: !!token,
         tokenLength: token ? token.length : 0
       })
       
-      if (!token) {
-        console.error('No authentication token found')
+      if (!isAuthenticated || !token) {
+        console.error('No authentication found - isAuthenticated:', isAuthenticated, 'hasToken:', !!token)
         setError('Authentication required. Please log in again.')
         return
       }
@@ -96,7 +98,7 @@ export default function SetupWizard() {
         
         if (response.status === 401) {
           console.error('Authentication failed - token may be expired')
-          localStorage.removeItem('token') // Clear invalid token
+          useAuthStore.getState().logout() // Clear invalid token using auth store
           setError('Authentication expired. Please refresh the page and log in again.')
           return
         }
