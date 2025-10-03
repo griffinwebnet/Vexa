@@ -4,7 +4,7 @@ import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/Dialog'
-import { User, Key, Shield, Mail } from 'lucide-react'
+import { User, Key, Shield } from 'lucide-react'
 import api from '../lib/api'
 
 export default function SelfService() {

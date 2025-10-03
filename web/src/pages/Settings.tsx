@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
-import { Network, Globe, Shield, Info, Download, ExternalLink } from 'lucide-react'
+import { Network, Globe, Shield, Info, Download } from 'lucide-react'
 import api from '../lib/api'
 import type { UpdateInfo } from '../types/updates'
 
