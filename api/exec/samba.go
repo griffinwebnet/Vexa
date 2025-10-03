@@ -138,12 +138,12 @@ func (s *SambaTool) DomainProvision(options DomainProvisionOptions) (string, err
 		args = append(args, "--option=dns forwarder = "+options.DNSForwarder)
 	}
 
-	// Run with clean umask to avoid permission issues that trigger security context bugs
+	// Run with clean environment to avoid permission issues that trigger security context bugs
 	cmd := exec.Command("samba-tool", args...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Umask: 0022, // Standard umask
-	}
+	// Set umask before running (Linux-specific workaround for security context bug)
+	oldMask := syscall.Umask(0022)
 	output, err := cmd.CombinedOutput()
+	syscall.Umask(oldMask) // Restore original umask
 	return string(output), err
 }
 
