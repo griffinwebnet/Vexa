@@ -58,18 +58,28 @@ export default function SetupWizard() {
 
       const domainName = getDomainFromRealm(formData.realm)
       
+      // Check authentication token
+      const token = localStorage.getItem('token')
       console.log('Starting domain provisioning with:', {
         domain: domainName,
         realm: formData.realm,
-        dns_forwarder: dnsServers
+        dns_forwarder: dnsServers,
+        hasToken: !!token,
+        tokenLength: token ? token.length : 0
       })
+      
+      if (!token) {
+        console.error('No authentication token found')
+        setError('Authentication required. Please log in again.')
+        return
+      }
       
       // Use the new streaming endpoint
       const response = await fetch('/api/v1/domain/provision-with-output', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           domain: domainName,
@@ -83,6 +93,14 @@ export default function SetupWizard() {
       if (!response.ok) {
         const errorText = await response.text()
         console.error('API Error Response:', errorText)
+        
+        if (response.status === 401) {
+          console.error('Authentication failed - token may be expired')
+          localStorage.removeItem('token') // Clear invalid token
+          setError('Authentication expired. Please refresh the page and log in again.')
+          return
+        }
+        
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
 
