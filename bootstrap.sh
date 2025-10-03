@@ -3,7 +3,7 @@ set -e
 
 # Vexa Bootstrap Script
 echo "======================================"
-echo "  Vexa Bootstrap Installer"
+echo "  Vexa Bootstrap Installer  v0.1.11"
 echo "======================================"
 echo ""
 
@@ -12,6 +12,14 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
+
+# Parse command line arguments
+NIGHTLY=false
+if [ "$1" == "--nightly" ]; then
+    NIGHTLY=true
+    echo -e "${YELLOW}NIGHTLY MODE: Installing from main branch${NC}"
+    echo ""
+fi
 
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then 
@@ -35,6 +43,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
     pkg-config \
     git \
     curl \
+    wget \
     nginx \
     ddclient \
     jq \
@@ -46,23 +55,34 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
 
 echo -e "${GREEN}Packages installed${NC}"
 
-# Fetch latest release
-echo -e "${YELLOW}Fetching latest Vexa release...${NC}"
+# Fetch Vexa source
 cd /tmp
 rm -rf Vexa 2>/dev/null || true
 
-LATEST_RELEASE=$(curl -s https://api.github.com/repos/griffinwebnet/Vexa/releases/latest | jq -r '.tag_name')
-
-if [ -z "$LATEST_RELEASE" ] || [ "$LATEST_RELEASE" = "null" ]; then
-    echo -e "${YELLOW}No releases found, cloning default branch...${NC}"
+if [ "$NIGHTLY" = true ]; then
+    echo -e "${YELLOW}Cloning nightly (main branch)...${NC}"
     git clone https://github.com/griffinwebnet/Vexa.git
     cd Vexa
     # Try master first, fallback to main
     git checkout master 2>/dev/null || git checkout main 2>/dev/null || true
+    CURRENT_VERSION="nightly-$(git rev-parse --short HEAD)"
+    echo "Installing nightly build: $CURRENT_VERSION"
 else
-    echo "Latest release: $LATEST_RELEASE"
-    git clone --branch "$LATEST_RELEASE" --depth 1 https://github.com/griffinwebnet/Vexa.git
-    cd Vexa
+    echo -e "${YELLOW}Fetching latest release...${NC}"
+    LATEST_RELEASE=$(curl -s https://api.github.com/repos/griffinwebnet/Vexa/releases/latest | jq -r '.tag_name')
+    
+    if [ -z "$LATEST_RELEASE" ] || [ "$LATEST_RELEASE" = "null" ]; then
+        echo -e "${YELLOW}No releases found, falling back to main branch...${NC}"
+        git clone https://github.com/griffinwebnet/Vexa.git
+        cd Vexa
+        git checkout master 2>/dev/null || git checkout main 2>/dev/null || true
+        CURRENT_VERSION="main-$(git rev-parse --short HEAD)"
+    else
+        echo "Latest release: $LATEST_RELEASE"
+        git clone --branch "$LATEST_RELEASE" --depth 1 https://github.com/griffinwebnet/Vexa.git
+        cd Vexa
+        CURRENT_VERSION="$LATEST_RELEASE"
+    fi
 fi
 
 # Create installation directory
@@ -155,7 +175,8 @@ echo -e "${GREEN}======================================"
 echo "  Installation Complete!"
 echo "======================================${NC}"
 echo ""
-echo "Vexa is now running at: http://$(hostname -I | awk '{print $1}')"
+echo "Vexa version: $CURRENT_VERSION"
+echo "Running at: http://$(hostname -I | awk '{print $1}')"
 echo ""
 echo "Services:"
 echo "  - vexa-api: systemctl status vexa-api"
@@ -163,6 +184,10 @@ echo "  - nginx: systemctl status nginx"
 echo ""
 echo "To start the API with dev mode (test credentials):"
 echo "  systemctl stop vexa-api"
-echo "  cd /var/www/vexa/api"
 echo "  /usr/local/bin/vexa-api --dev"
+echo ""
+echo "To update Vexa in the future:"
+echo "  wget https://raw.githubusercontent.com/griffinwebnet/Vexa/master/update.sh"
+echo "  chmod +x update.sh"
+echo "  sudo ./update.sh"
 echo ""
