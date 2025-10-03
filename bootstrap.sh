@@ -180,6 +180,7 @@ install_nodejs() {
     case "$OS" in
         ubuntu|debian)
             curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+            apt-get update
             apt-get install -y nodejs
             ;;
         centos|rhel|rocky)
@@ -191,8 +192,15 @@ install_nodejs() {
             ;;
     esac
     
-    echo -e "${GREEN}Node.js: $(node --version)${NC}"
-    echo -e "${GREEN}npm: $(npm --version)${NC}"
+    # Update PATH and test installation
+    export PATH=$PATH:/usr/bin
+    if command -v node &> /dev/null; then
+        echo -e "${GREEN}Node.js: $(node --version)${NC}"
+        echo -e "${GREEN}npm: $(npm --version)${NC}"
+    else
+        echo -e "${RED}Node.js installation failed${NC}"
+        exit 1
+    fi
 }
 
 # Install Dart SDK
@@ -208,18 +216,25 @@ install_dart() {
             ;;
         centos|rhel|rocky)
             # For RHEL/CentOS, we'll use the tarball
+            apt-get install -y unzip
             curl -fsSL https://storage.googleapis.com/dart-archive/channels/stable/release/latest/sdk/dartsdk-linux-x64-release.zip -o dart.zip
-            unzip dart.zip -d /usr/local
+            unzip -q dart.zip -d /usr/local
             rm dart.zip
             echo 'export PATH=$PATH:/usr/local/dart-sdk/bin' > /etc/profile.d/dart.sh
-            source /etc/profile.d/dart.sh
             ;;
         arch)
             pacman -S --noconfirm dart
             ;;
     esac
     
-    echo -e "${GREEN}Dart: $(dart --version)${NC}"
+    # Update PATH and test installation
+    export PATH=$PATH:/usr/bin:/usr/local/dart-sdk/bin
+    if command -v dart &> /dev/null; then
+        echo -e "${GREEN}Dart: $(dart --version)${NC}"
+    else
+        echo -e "${RED}Dart installation failed${NC}"
+        exit 1
+    fi
 }
 
 # Prepare system for Samba AD DC
