@@ -4,7 +4,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Server, GitMerge, Plus, Copy, Terminal } from 'lucide-react'
-import api from '../lib/api'
 
 type SetupMode = 'new' | 'join' | 'migrate' | null
 
