@@ -47,3 +47,9 @@ func (s *System) StopService(serviceName string) error {
 	cmd := exec.Command("systemctl", "stop", serviceName)
 	return cmd.Run()
 }
+
+// RemoveFile removes a file from the filesystem
+func (s *System) RemoveFile(path string) error {
+	cmd := exec.Command("rm", "-f", path)
+	return cmd.Run()
+}

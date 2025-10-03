@@ -28,6 +28,16 @@ func (s *DomainService) ProvisionDomain(req models.ProvisionDomainRequest) error
 		req.DNSBackend = "SAMBA_INTERNAL"
 	}
 
+	// Clean up existing Samba configuration to avoid conflicts
+	if err := s.system.RemoveFile("/etc/samba/smb.conf"); err != nil {
+		// Ignore error if file doesn't exist
+	}
+
+	// Stop conflicting services
+	s.system.StopService("smbd")
+	s.system.StopService("nmbd")
+	s.system.StopService("winbind")
+
 	// Generate a secure admin password
 	adminPassword := generateAdminPassword()
 

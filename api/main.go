@@ -13,7 +13,7 @@ import (
 // Global dev mode flag
 var DevMode bool
 
-const Version = "0.1.9"
+const Version = "0.1.10"
 
 func main() {
 	// Parse command line flags
