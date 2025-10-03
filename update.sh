@@ -3,7 +3,7 @@ set -e
 
 # Vexa Update Script
 echo "======================================"
-echo "  Vexa Update Script  v0.1.25"
+echo "  Vexa Update Script  v0.1.26"
 echo "======================================"
 echo ""
 
@@ -85,7 +85,18 @@ echo -e "${GREEN}API built${NC}"
 # Build React frontend
 echo -e "${YELLOW}Building web interface...${NC}"
 cd /tmp/Vexa/web
-npm ci
+
+# Clean npm cache and dependencies to fix rollup module issues
+echo -e "${YELLOW}Cleaning npm dependencies...${NC}"
+rm -rf node_modules package-lock.json
+npm cache clean --force
+
+# Install dependencies
+echo -e "${YELLOW}Installing dependencies...${NC}"
+npm install
+
+# Build the frontend
+echo -e "${YELLOW}Building frontend...${NC}"
 npm run build
 
 # Update web files
