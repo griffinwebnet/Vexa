@@ -119,13 +119,27 @@ export default function SetupWizard() {
                   const content = data.content
                   console.log('SSE Output:', content) // Console logging for debugging
                   
-                  // Filter and format status messages for UI
-                  if (!content.startsWith('STDOUT:') && !content.startsWith('STDERR:') && !content.startsWith('ERROR:')) {
-                    setCurrentStatus(content)
-                  } else if (content.startsWith('ERROR:')) {
+                  // Show important status messages in UI
+                  if (content.startsWith('ERROR:')) {
                     setError(content.replace('ERROR: ', ''))
                     setProvisioningState('error')
                     return
+                  } else if (
+                    // Show key status messages
+                    content.includes('Starting domain provisioning') ||
+                    content.includes('Checking if samba-tool is available') ||
+                    content.includes('samba-tool is available') ||
+                    content.includes('Cleaning up existing Samba configuration') ||
+                    content.includes('Stopping conflicting services') ||
+                    content.includes('Generating admin password') ||
+                    content.includes('Starting domain provision command') ||
+                    content.includes('Domain provisioning completed successfully') ||
+                    content.includes('Creating default groups') ||
+                    content.includes('Starting Samba AD DC service') ||
+                    content.includes('Samba AD DC service started successfully') ||
+                    content.includes('Domain provisioning completed!')
+                  ) {
+                    setCurrentStatus(content)
                   }
                 } else if (data.type === 'complete') {
                   console.log('Domain provisioning completed!') // Console logging for debugging

@@ -93,20 +93,27 @@ func (s *DomainService) GetDomainStatus() (*models.DomainStatusResponse, error) 
 		// Parse domain info from samba-tool domain info output
 		output, err := s.sambaTool.DomainInfo("127.0.0.1")
 		if err == nil {
+			// Debug: log the actual output
+			fmt.Printf("DEBUG: samba-tool domain info output:\n%s\n", output)
+
 			// Parse domain and realm from output
 			lines := strings.Split(output, "\n")
 			for _, line := range lines {
 				line = strings.TrimSpace(line)
-				if strings.Contains(line, "Domain:") {
+				// Look for NetBIOS Domain (short domain name)
+				if strings.Contains(line, "NetBIOS Domain:") {
 					parts := strings.Split(line, ":")
 					if len(parts) > 1 {
 						response.Domain = strings.TrimSpace(parts[1])
+						fmt.Printf("DEBUG: Found Domain: %s\n", response.Domain)
 					}
 				}
-				if strings.Contains(line, "Realm:") {
+				// Look for DNS Domain (realm)
+				if strings.Contains(line, "DNS Domain:") {
 					parts := strings.Split(line, ":")
 					if len(parts) > 1 {
 						response.Realm = strings.TrimSpace(parts[1])
+						fmt.Printf("DEBUG: Found Realm: %s\n", response.Realm)
 					}
 				}
 			}
