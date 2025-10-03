@@ -1,5 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -84,8 +83,6 @@ export default function SetupWizard() {
       })
       
       if (!response.ok) {
-        const errorText = await response.text()
-        
         if (response.status === 401) {
           useAuthStore.getState().logout()
           setError('Authentication expired. Please refresh the page and log in again.')
