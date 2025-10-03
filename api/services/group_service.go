@@ -2,7 +2,6 @@ package services
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/vexa/api/exec"
 	"github.com/vexa/api/models"
@@ -22,10 +21,6 @@ func NewGroupService() *GroupService {
 
 // ListGroups returns all groups in the domain
 func (s *GroupService) ListGroups() ([]models.Group, error) {
-	// Development mode: Return dummy data for UI testing
-	if os.Getenv("ENV") == "development" {
-		return s.getDevGroups(), nil
-	}
 
 	output, err := s.sambaTool.GroupList()
 	if err != nil {
@@ -77,10 +72,6 @@ func (s *GroupService) GetGroup(groupName string) (*models.Group, error) {
 
 // UpdateGroup updates an existing group
 func (s *GroupService) UpdateGroup(groupName string, req models.UpdateGroupRequest) error {
-	// Development mode: Simulate update
-	if os.Getenv("ENV") == "development" {
-		return nil
-	}
 
 	// Update description if provided
 	if req.Description != nil {
@@ -119,17 +110,4 @@ func (s *GroupService) RemoveGroupMembers(groupName string, req models.RemoveGro
 		return fmt.Errorf("failed to remove members from group: %s", output)
 	}
 	return nil
-}
-
-// getDevGroups returns dummy groups for UI development
-func (s *GroupService) getDevGroups() []models.Group {
-	return []models.Group{
-		{Name: "Domain Admins", Description: "Domain administrators", Members: []string{"administrator"}},
-		{Name: "Domain Users", Description: "All domain users", Members: []string{"jsmith", "mjohnson", "bwilliams", "administrator", "sarah.lee", "mike.chen"}},
-		{Name: "IT Staff", Description: "IT department", Members: []string{"jsmith", "administrator"}},
-		{Name: "Finance", Description: "Finance department", Members: []string{"mjohnson"}},
-		{Name: "Sales", Description: "Sales department", Members: []string{"bwilliams"}},
-		{Name: "HR", Description: "Human resources", Members: []string{"sarah.lee"}},
-		{Name: "Marketing", Description: "Marketing team", Members: []string{}},
-	}
 }

@@ -2,7 +2,6 @@ package services
 
 import (
 	"fmt"
-	"os"
 	exec "os/exec"
 	"strings"
 
@@ -24,10 +23,6 @@ func NewComputerService() *ComputerService {
 
 // ListComputers returns all computers/devices in the domain with connection status
 func (s *ComputerService) ListComputers() ([]models.Computer, error) {
-	// Development mode: Return dummy data for UI testing
-	if os.Getenv("ENV") == "development" {
-		return s.getDevComputers(), nil
-	}
 
 	output, err := s.sambaTool.Run("computer", "list")
 	if err != nil {
@@ -140,50 +135,4 @@ func (s *ComputerService) getHeadscaleIP(hostname string) string {
 	// For now, return empty - this requires proper JSON parsing
 	_ = output
 	return ""
-}
-
-// getDevComputers returns dummy computers for UI development
-func (s *ComputerService) getDevComputers() []models.Computer {
-	return []models.Computer{
-		{
-			Name:            "DESKTOP-IT-01",
-			DNSName:         "DESKTOP-IT-01.example.local",
-			OperatingSystem: "Windows 11 Pro",
-			Online:          true,
-			ConnectionType:  "local",
-			IPAddress:       "192.168.1.105",
-		},
-		{
-			Name:            "LAPTOP-SALES-03",
-			DNSName:         "LAPTOP-SALES-03.example.local",
-			OperatingSystem: "Windows 10 Pro",
-			Online:          true,
-			ConnectionType:  "overlay",
-			IPAddress:       "192.168.1.147",
-			OverlayIP:       "100.64.0.12",
-		},
-		{
-			Name:            "SERVER-FILE-01",
-			DNSName:         "SERVER-FILE-01.example.local",
-			OperatingSystem: "Windows Server 2022",
-			Online:          true,
-			ConnectionType:  "local",
-			IPAddress:       "192.168.1.50",
-		},
-		{
-			Name:            "LAPTOP-REMOTE-05",
-			DNSName:         "LAPTOP-REMOTE-05.example.local",
-			OperatingSystem: "Windows 11 Pro",
-			Online:          true,
-			ConnectionType:  "overlay",
-			OverlayIP:       "100.64.0.25",
-		},
-		{
-			Name:            "WORKSTATION-HR-02",
-			DNSName:         "WORKSTATION-HR-02.example.local",
-			OperatingSystem: "Windows 10 Pro",
-			Online:          false,
-			ConnectionType:  "offline",
-		},
-	}
 }

@@ -15,29 +15,49 @@ export default function SetupWizard() {
   const [error, setError] = useState('')
   
   const [formData, setFormData] = useState({
-    domain: '',
     realm: '',
-    adminPassword: '',
-    confirmPassword: '',
-    dnsForwarder: '8.8.8.8',
+    dnsProvider: 'cloudflare',
+    customDnsServers: '',
   })
+
+  const dnsProviders = [
+    { value: 'cloudflare', label: 'Cloudflare (1.1.1.1)', servers: '1.1.1.1,1.0.0.1' },
+    { value: 'google', label: 'Google (8.8.8.8)', servers: '8.8.8.8,8.8.4.4' },
+    { value: 'quad9', label: 'Quad9 (9.9.9.9)', servers: '9.9.9.9,149.112.112.112' },
+    { value: 'custom', label: 'Custom DNS Servers', servers: '' },
+  ]
+
+  // Auto-generate domain name from realm
+  const getDomainFromRealm = (realm: string) => {
+    if (!realm) return ''
+    const domainPart = realm.split('.')[0]
+    return domainPart.toUpperCase()
+  }
 
   const handleSetupNew = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
-    if (formData.adminPassword !== formData.confirmPassword) {
-      setError('Passwords do not match')
+    if (!formData.realm.trim()) {
+      setError('Realm is required')
       return
     }
 
     setLoading(true)
     try {
+      // Get DNS servers based on provider
+      let dnsServers = formData.customDnsServers
+      if (formData.dnsProvider !== 'custom') {
+        const provider = dnsProviders.find(p => p.value === formData.dnsProvider)
+        dnsServers = provider?.servers || '1.1.1.1,1.0.0.1'
+      }
+
+      const domainName = getDomainFromRealm(formData.realm)
+      
       await api.post('/domain/provision', {
-        domain: formData.domain,
+        domain: domainName,
         realm: formData.realm,
-        admin_password: formData.adminPassword,
-        dns_forwarder: formData.dnsForwarder,
+        dns_forwarder: dnsServers,
       })
       
       localStorage.setItem('vexa-setup-complete', 'true')
@@ -133,22 +153,6 @@ export default function SetupWizard() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSetupNew} className="space-y-4">
-              <div className="space-y-2">
-                <label htmlFor="domain" className="text-sm font-medium">
-                  Domain Name
-                </label>
-                <Input
-                  id="domain"
-                  type="text"
-                  placeholder="MYDOMAIN"
-                  value={formData.domain}
-                  onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
-                  required
-                />
-                <p className="text-xs text-muted-foreground">
-                  NetBIOS domain name (e.g., MYDOMAIN)
-                </p>
-              </div>
 
               <div className="space-y-2">
                 <label htmlFor="realm" className="text-sm font-medium">
@@ -165,51 +169,55 @@ export default function SetupWizard() {
                 <p className="text-xs text-muted-foreground">
                   Kerberos realm (e.g., mydomain.local)
                 </p>
+                {formData.realm && (
+                  <div className="rounded-md bg-accent p-2 text-sm">
+                    Domain Name: <span className="font-mono">{getDomainFromRealm(formData.realm)}</span>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Domain name auto-generated from realm
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
-                <label htmlFor="adminPassword" className="text-sm font-medium">
-                  Administrator Password
+                <label htmlFor="dns_provider" className="text-sm font-medium">
+                  DNS Provider
                 </label>
-                <Input
-                  id="adminPassword"
-                  type="password"
-                  placeholder="Enter strong password"
-                  value={formData.adminPassword}
-                  onChange={(e) => setFormData({ ...formData, adminPassword: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="confirmPassword" className="text-sm font-medium">
-                  Confirm Password
-                </label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="Confirm password"
-                  value={formData.confirmPassword}
-                  onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="dnsForwarder" className="text-sm font-medium">
-                  DNS Forwarder
-                </label>
-                <Input
-                  id="dnsForwarder"
-                  type="text"
-                  placeholder="8.8.8.8"
-                  value={formData.dnsForwarder}
-                  onChange={(e) => setFormData({ ...formData, dnsForwarder: e.target.value })}
-                />
+                <select
+                  id="dns_provider"
+                  value={formData.dnsProvider}
+                  onChange={(e) => setFormData({ ...formData, dnsProvider: e.target.value })}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {dnsProviders.map((provider) => (
+                    <option key={provider.value} value={provider.value}>
+                      {provider.label}
+                    </option>
+                  ))}
+                </select>
                 <p className="text-xs text-muted-foreground">
-                  External DNS server for forwarding (optional)
+                  DNS provider for upstream queries
                 </p>
               </div>
+
+              {formData.dnsProvider === 'custom' && (
+                <div className="space-y-2">
+                  <label htmlFor="customDnsServers" className="text-sm font-medium">
+                    Custom DNS Servers
+                  </label>
+                  <Input
+                    id="customDnsServers"
+                    type="text"
+                    placeholder="8.8.8.8,8.8.4.4"
+                    value={formData.customDnsServers}
+                    onChange={(e) => setFormData({ ...formData, customDnsServers: e.target.value })}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Comma-separated list of DNS servers
+                  </p>
+                </div>
+              )}
 
               {error && (
                 <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">

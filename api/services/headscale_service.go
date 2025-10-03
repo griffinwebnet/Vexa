@@ -3,7 +3,6 @@ package services
 import (
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/vexa/api/exec"
 )
@@ -22,15 +21,6 @@ func NewHeadscaleService() *HeadscaleService {
 
 // GetStatus returns the current Headscale status
 func (s *HeadscaleService) GetStatus() (map[string]interface{}, error) {
-	if os.Getenv("ENV") == "development" {
-		// Return dummy data for development
-		return map[string]interface{}{
-			"enabled": true,
-			"status":  "running",
-			"users":   []string{"admin", "user"},
-			"nodes":   5,
-		}, nil
-	}
 
 	// Check if Headscale is enabled
 	if !s.headscaleTool.IsEnabled() {
@@ -61,20 +51,6 @@ func (s *HeadscaleService) GetStatus() (map[string]interface{}, error) {
 
 // CreatePreAuthKey creates a new pre-auth key for deployment
 func (s *HeadscaleService) CreatePreAuthKey(user string, reusable bool, ephemeral bool) (*exec.PreAuthKey, error) {
-	if os.Getenv("ENV") == "development" {
-		// Return dummy pre-auth key for development
-		return &exec.PreAuthKey{
-			User:       user,
-			ID:         "dummy-key-id",
-			Key:        "tskey-auth-dummy123456789abcdef",
-			Reusable:   reusable,
-			Ephemeral:  ephemeral,
-			Used:       false,
-			Expiration: time.Now().Add(24 * time.Hour).Format(time.RFC3339),
-			CreatedAt:  time.Now().Format(time.RFC3339),
-			ACLTags:    []string{},
-		}, nil
-	}
 
 	// Create actual pre-auth key
 	key, err := s.headscaleTool.CreatePreAuthKey(user, reusable, ephemeral)

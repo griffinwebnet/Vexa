@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"os"
 
@@ -9,16 +10,23 @@ import (
 	"github.com/vexa/api/middleware"
 )
 
-const Version = "0.1.6"
+// Global dev mode flag
+var DevMode bool
+
+const Version = "0.1.7"
 
 func main() {
+	// Parse command line flags
+	flag.BoolVar(&DevMode, "dev", false, "Enable development mode with test credentials")
+	flag.Parse()
+
 	// Set Gin mode
 	if os.Getenv("ENV") == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
 	// Initialize handlers
-	authHandler := handlers.NewAuthHandler()
+	authHandler := handlers.NewAuthHandler(DevMode)
 	userHandler := handlers.NewUserHandler()
 	groupHandler := handlers.NewGroupHandler()
 	domainHandler := handlers.NewDomainHandler()
@@ -127,6 +135,10 @@ func main() {
 	}
 
 	log.Printf("Vexa API Server starting on port %s", port)
+	if DevMode {
+		log.Println("WARNING: Development mode enabled - test credentials are active!")
+		log.Println("SECURITY: Never run with --dev flag in production!")
+	}
 	if err := router.Run(":" + port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}

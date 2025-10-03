@@ -112,6 +112,15 @@ func (s *SambaTool) GroupRemoveMembers(groupName string, members []string) (stri
 	return s.Run(args...)
 }
 
+// GroupModify modifies an existing group
+func (s *SambaTool) GroupModify(groupName string, description string) (string, error) {
+	args := []string{"group", "modify", groupName}
+	if description != "" {
+		args = append(args, "--description="+description)
+	}
+	return s.Run(args...)
+}
+
 // DomainProvision provisions a new domain
 func (s *SambaTool) DomainProvision(options DomainProvisionOptions) (string, error) {
 	args := []string{

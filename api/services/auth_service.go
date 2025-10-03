@@ -9,11 +9,15 @@ import (
 )
 
 // AuthService handles authentication-related business logic
-type AuthService struct{}
+type AuthService struct {
+	devMode bool
+}
 
 // NewAuthService creates a new AuthService instance
-func NewAuthService() *AuthService {
-	return &AuthService{}
+func NewAuthService(devMode bool) *AuthService {
+	return &AuthService{
+		devMode: devMode,
+	}
 }
 
 // Authenticate validates user credentials
@@ -53,15 +57,32 @@ func (s *AuthService) GenerateToken(username string, isAdmin bool) (*models.Logi
 	}, nil
 }
 
-// authenticateUser validates credentials against PAM or dev mode
+// authenticateUser validates credentials against PAM, SAMBA, or dev mode
 func (s *AuthService) authenticateUser(username, password string) (bool, bool) {
-	// TODO: Implement actual PAM authentication
-	// For now, use simple dev authentication
-	if username == "admin" && password == "admin" {
+	// Only allow test credentials in dev mode
+	if s.devMode {
+		// Development mode: allow test credentials
+		if username == "admin" && password == "admin" {
+			return true, true
+		}
+		if username == "user" && password == "user" {
+			return true, false
+		}
+	}
+
+	// Production mode: Try SAMBA domain authentication first, then PAM
+	if utils.AuthenticateSAMBA(username, password) {
+		// SAMBA authentication successful
+		// TODO: Check if user is in Domain Admins group for admin status
 		return true, true
 	}
-	if username == "user" && password == "user" {
-		return true, false
+
+	if utils.AuthenticatePAM(username, password) {
+		// PAM authentication successful for system users
+		// TODO: Implement proper admin group checking for PAM users
+		return true, true
 	}
+
+	// Authentication failed
 	return false, false
 }

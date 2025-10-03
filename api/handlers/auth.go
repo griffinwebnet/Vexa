@@ -14,9 +14,9 @@ type AuthHandler struct {
 }
 
 // NewAuthHandler creates a new AuthHandler instance
-func NewAuthHandler() *AuthHandler {
+func NewAuthHandler(devMode bool) *AuthHandler {
 	return &AuthHandler{
-		authService: services.NewAuthService(),
+		authService: services.NewAuthService(devMode),
 	}
 }
 

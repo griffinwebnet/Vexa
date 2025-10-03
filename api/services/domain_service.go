@@ -2,7 +2,6 @@ package services
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/vexa/api/exec"
 	"github.com/vexa/api/models"
@@ -60,16 +59,6 @@ func (s *DomainService) ProvisionDomain(req models.ProvisionDomainRequest) error
 
 // GetDomainStatus returns the current status of the domain controller
 func (s *DomainService) GetDomainStatus() (*models.DomainStatusResponse, error) {
-	// Development mode: Return dummy status for UI testing
-	if os.Getenv("ENV") == "development" {
-		return &models.DomainStatusResponse{
-			Provisioned: true,
-			Domain:      "EXAMPLE",
-			Realm:       "example.local",
-			DCReady:     true,
-			DNSReady:    true,
-		}, nil
-	}
 
 	// Check if domain is provisioned
 	_, err := s.sambaTool.DomainInfo("127.0.0.1")
@@ -130,7 +119,10 @@ func (s *DomainService) createDefaultGroups() error {
 
 	for _, group := range groups {
 		// Try to create group, ignore if it already exists
-		s.sambaTool.GroupCreate(group, "")
+		options := exec.GroupCreateOptions{
+			Description: "", // Empty description for default groups
+		}
+		s.sambaTool.GroupCreate(group, options)
 	}
 
 	return nil
