@@ -3,7 +3,7 @@ set -e
 
 # Vexa Bootstrap Script
 echo "======================================"
-echo "  Vexa Bootstrap Installer  v0.1.20"
+echo "  Vexa Bootstrap Installer  v0.1.21"
 echo "======================================"
 echo ""
 
@@ -29,22 +29,22 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 echo -e "${GREEN}Installing system packages...${NC}"
-apt-get update
-
+            apt-get update
+            
 # Install non-Samba packages first
-DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    krb5-user \
-    krb5-config \
-    ldb-tools \
-    attr \
-    acl \
-    build-essential \
-    pkg-config \
-    git \
-    curl \
+            DEBIAN_FRONTEND=noninteractive apt-get install -y \
+                krb5-user \
+                krb5-config \
+                ldb-tools \
+                attr \
+                acl \
+                build-essential \
+                pkg-config \
+                git \
+                curl \
     wget \
-    nginx \
-    ddclient \
+                nginx \
+                ddclient \
     jq \
     pamtester \
     vim-nox \
@@ -52,50 +52,44 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
     nodejs \
     npm
 
-# Downgrade Samba to 4.15 from Ubuntu 22.04
-# Samba 4.19.5 in Ubuntu 24.04 has a security context bug in unprivileged LXC containers
-echo -e "${YELLOW}Installing Samba 4.15 from Ubuntu 22.04 (fixes LXC provisioning bug)...${NC}"
+# Install Samba
+echo -e "${YELLOW}Installing Samba...${NC}"
+DEBIAN_FRONTEND=noninteractive apt-get install -y \
+                    samba \
+    samba-dsdb-modules \
+    winbind
 
-cd /tmp
-rm -rf samba_debs 2>/dev/null || true
-mkdir -p samba_debs
-cd samba_debs
+echo -e "${GREEN}Samba installed${NC}"
 
-SAMBA_VERSION="4.15.13+dfsg-0ubuntu1.6"
-
-# Download Samba 4.15 packages from Jammy
-echo -e "${YELLOW}Downloading Samba 4.15 packages...${NC}"
-wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/samba_${SAMBA_VERSION}_amd64.deb
-wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/samba-common_${SAMBA_VERSION}_all.deb
-wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/samba-common-bin_${SAMBA_VERSION}_amd64.deb
-wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/samba-dsdb-modules_${SAMBA_VERSION}_amd64.deb
-wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/samba-libs_${SAMBA_VERSION}_amd64.deb
-wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/winbind_${SAMBA_VERSION}_amd64.deb
-wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/libwbclient0_${SAMBA_VERSION}_amd64.deb
-
-# Stop any running Samba services
-systemctl stop samba-ad-dc 2>/dev/null || true
-systemctl stop smbd nmbd winbind 2>/dev/null || true
-
-# Force install the downgraded packages
-echo -e "${YELLOW}Installing Samba 4.15...${NC}"
-DEBIAN_FRONTEND=noninteractive dpkg --force-downgrade --force-depends -i *.deb
-DEBIAN_FRONTEND=noninteractive apt-get install -f -y
-
-# Hold Samba packages to prevent upgrade
-echo -e "${YELLOW}Holding Samba packages...${NC}"
-apt-mark hold samba samba-dsdb-modules samba-common samba-common-bin samba-libs winbind libwbclient0
-
-# Cleanup
-cd /tmp
-rm -rf samba_debs
-
-INSTALLED_VERSION=$(dpkg -l | grep "^ii  samba " | awk '{print $3}')
-echo -e "${GREEN}Samba installed: $INSTALLED_VERSION${NC}"
-
-if [[ ! "$INSTALLED_VERSION" == *"4.15"* ]]; then
-    echo -e "${RED}ERROR: Samba 4.15 installation failed!${NC}"
-    exit 1
+# Detect if running in unprivileged LXC
+if [ -f /proc/1/status ] && grep -q "CapEff.*0000000000000000" /proc/1/status 2>/dev/null; then
+    echo ""
+    echo -e "${RED}╔════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${RED}║                    ⚠️  WARNING  ⚠️                            ║${NC}"
+    echo -e "${RED}╚════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${YELLOW}Unprivileged container detected!${NC}"
+    echo ""
+    echo -e "Samba 4.19.x has a known bug in unprivileged LXC/containers that"
+    echo -e "causes domain provisioning to fail with:"
+    echo -e "  ${RED}'Security context active token stack underflow!'${NC}"
+    echo ""
+    echo -e "${YELLOW}RECOMMENDED SOLUTIONS:${NC}"
+    echo ""
+    echo -e "  ${GREEN}1. Use Debian 12 (Bookworm) LXC instead${NC}"
+    echo -e "     - Includes Samba 4.17 which may work better"
+    echo -e "     - curl -sSL https://raw.githubusercontent.com/griffinwebnet/Vexa/main/bootstrap.sh | bash"
+    echo ""
+    echo -e "  ${GREEN}2. Use a full KVM/QEMU VM instead of LXC${NC}"
+    echo -e "     - No container restrictions"
+    echo -e "     - Best long-term solution for production"
+    echo ""
+    echo -e "  ${GREEN}3. Wait for Ubuntu/Samba bugfix${NC}"
+    echo -e "     - Bug report: https://bugzilla.samba.org/show_bug.cgi?id=15203"
+    echo ""
+    echo -e "${RED}Installation will continue, but domain provisioning may fail.${NC}"
+    echo ""
+    read -p "Press Enter to continue anyway, or Ctrl+C to abort..."
 fi
 
 # Fetch Vexa source
@@ -135,19 +129,19 @@ mkdir -p /var/www/vexa
 echo "Copying source files..."
 cp -r api /var/www/vexa/
 cp -r web /var/www/vexa/
-
-# Build Go API
+    
+    # Build Go API
 echo -e "${YELLOW}Building API server...${NC}"
 cd /var/www/vexa/api
-go build -o /usr/local/bin/vexa-api
-chmod +x /usr/local/bin/vexa-api
+    go build -o /usr/local/bin/vexa-api
+    chmod +x /usr/local/bin/vexa-api
 echo -e "${GREEN}API built${NC}"
-
-# Build React frontend
+    
+    # Build React frontend
 echo -e "${YELLOW}Building web interface...${NC}"
 cd /var/www/vexa/web
-npm ci
-npm run build
+    npm ci
+    npm run build
 echo -e "${GREEN}Frontend built${NC}"
 
 # Configure Nginx
@@ -178,7 +172,7 @@ server {
     }
 }
 EOF
-
+    
 ln -sf /etc/nginx/sites-available/vexa /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
@@ -187,7 +181,7 @@ echo -e "${GREEN}Nginx configured${NC}"
 # Create systemd service
 echo -e "${YELLOW}Creating systemd service...${NC}"
 
-cat > /etc/systemd/system/vexa-api.service << 'EOF'
+    cat > /etc/systemd/system/vexa-api.service << 'EOF'
 [Unit]
 Description=Vexa API Server
 After=network.target
@@ -204,8 +198,8 @@ Environment=ENV=production
 [Install]
 WantedBy=multi-user.target
 EOF
-
-systemctl daemon-reload
+    
+    systemctl daemon-reload
 systemctl enable vexa-api
 systemctl start vexa-api
 systemctl enable nginx
@@ -213,24 +207,24 @@ systemctl enable nginx
 echo -e "${GREEN}Service started${NC}"
 
 # Done
-echo ""
-echo -e "${GREEN}======================================"
+    echo ""
+    echo -e "${GREEN}======================================"
 echo "  Installation Complete!"
-echo "======================================${NC}"
-echo ""
+    echo "======================================${NC}"
+    echo ""
 echo "Vexa version: $CURRENT_VERSION"
 echo "Running at: http://$(hostname -I | awk '{print $1}')"
-echo ""
+    echo ""
 echo "Services:"
 echo "  - vexa-api: systemctl status vexa-api"
 echo "  - nginx: systemctl status nginx"
-echo ""
+    echo ""
 echo "To start the API with dev mode (test credentials):"
 echo "  systemctl stop vexa-api"
 echo "  /usr/local/bin/vexa-api --dev"
-echo ""
+    echo ""
 echo "To update Vexa in the future:"
 echo "  wget https://raw.githubusercontent.com/griffinwebnet/Vexa/master/update.sh"
 echo "  chmod +x update.sh"
 echo "  sudo ./update.sh"
-echo ""
+    echo ""

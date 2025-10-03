@@ -3,7 +3,7 @@ set -e
 
 # Vexa Update Script
 echo "======================================"
-echo "  Vexa Update Script  v0.1.20"
+echo "  Vexa Update Script  v0.1.21"
 echo "======================================"
 echo ""
 
@@ -28,58 +28,16 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Ensure Samba is held at 4.15 (don't let it upgrade to buggy 4.19.5)
-echo -e "${YELLOW}Checking Samba version...${NC}"
-CURRENT_SAMBA=$(dpkg -l | grep "^ii  samba " | awk '{print $3}')
-
-if [[ "$CURRENT_SAMBA" == *"4.15"* ]]; then
-    echo -e "${GREEN}Samba 4.15 installed - good!${NC}"
-    # Ensure packages are held
-    apt-mark hold samba samba-dsdb-modules samba-common samba-common-bin samba-libs winbind libwbclient0 2>/dev/null || true
-else
-    echo -e "${RED}WARNING: Samba $CURRENT_SAMBA detected - need 4.15 for LXC!${NC}"
-    echo -e "${YELLOW}Downgrading to Samba 4.15...${NC}"
-    
-    cd /tmp
-    rm -rf samba_debs 2>/dev/null || true
-    mkdir -p samba_debs
-    cd samba_debs
-    
-    SAMBA_VERSION="4.15.13+dfsg-0ubuntu1.6"
-    
-    # Download Samba 4.15 packages
-    echo -e "${YELLOW}Downloading Samba 4.15 packages...${NC}"
-    wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/samba_${SAMBA_VERSION}_amd64.deb
-    wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/samba-common_${SAMBA_VERSION}_all.deb
-    wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/samba-common-bin_${SAMBA_VERSION}_amd64.deb
-    wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/samba-dsdb-modules_${SAMBA_VERSION}_amd64.deb
-    wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/samba-libs_${SAMBA_VERSION}_amd64.deb
-    wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/winbind_${SAMBA_VERSION}_amd64.deb
-    wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/libwbclient0_${SAMBA_VERSION}_amd64.deb
-    
-    # Stop Samba services before downgrade
-    echo -e "${YELLOW}Stopping Samba services...${NC}"
-    systemctl stop samba-ad-dc 2>/dev/null || true
-    systemctl stop smbd nmbd winbind 2>/dev/null || true
-    
-    # Force install downgraded packages
-    echo -e "${YELLOW}Installing Samba 4.15...${NC}"
-    DEBIAN_FRONTEND=noninteractive dpkg --force-downgrade --force-depends -i *.deb
-    DEBIAN_FRONTEND=noninteractive apt-get install -f -y
-    
-    # Hold packages
-    echo -e "${YELLOW}Holding Samba packages...${NC}"
-    apt-mark hold samba samba-dsdb-modules samba-common samba-common-bin samba-libs winbind libwbclient0
-    
-    cd /tmp
-    rm -rf samba_debs
-    
-    INSTALLED_VERSION=$(dpkg -l | grep "^ii  samba " | awk '{print $3}')
-    echo -e "${GREEN}Samba downgraded to: $INSTALLED_VERSION${NC}"
-    
-    if [[ ! "$INSTALLED_VERSION" == *"4.15"* ]]; then
-        echo -e "${RED}ERROR: Samba 4.15 installation failed!${NC}"
-        exit 1
+# Check for unprivileged container issues
+if [ -f /proc/1/status ] && grep -q "CapEff.*0000000000000000" /proc/1/status 2>/dev/null; then
+    CURRENT_SAMBA=$(dpkg -l | grep "^ii  samba " | awk '{print $3}')
+    if [[ "$CURRENT_SAMBA" == *"4.19"* ]]; then
+        echo ""
+        echo -e "${YELLOW}⚠️  WARNING: Samba 4.19 in unprivileged container${NC}"
+        echo -e "Domain provisioning may fail. Consider migrating to:"
+        echo -e "  - Debian 12 (Bookworm) LXC, or"
+        echo -e "  - Full KVM/QEMU VM"
+        echo ""
     fi
 fi
 
