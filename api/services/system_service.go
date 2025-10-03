@@ -2,14 +2,13 @@ package services
 
 import (
 	"bytes"
-	"fmt"
 	"os/exec"
 	"strings"
 	"time"
 )
 
-// getSambaVersion returns the installed Samba version
-func getSambaVersion() string {
+// GetSambaVersion returns the installed Samba version
+func GetSambaVersion() string {
 	cmd := exec.Command("samba", "-V")
 	var out bytes.Buffer
 	cmd.Stdout = &out
@@ -19,8 +18,8 @@ func getSambaVersion() string {
 	return strings.TrimSpace(out.String())
 }
 
-// checkSambaUpdates checks if Samba updates are available
-func checkSambaUpdates() string {
+// CheckSambaUpdates checks if Samba updates are available
+func CheckSambaUpdates() string {
 	// Use package manager to check for updates
 	cmd := exec.Command("apt", "list", "--upgradable", "samba")
 	var out bytes.Buffer
@@ -34,8 +33,8 @@ func checkSambaUpdates() string {
 	return "up_to_date"
 }
 
-// getSambaLastUpdate returns when Samba was last updated
-func getSambaLastUpdate() string {
+// GetSambaLastUpdate returns when Samba was last updated
+func GetSambaLastUpdate() string {
 	// Check package install time
 	cmd := exec.Command("stat", "-c", "%y", "/usr/sbin/samba")
 	var out bytes.Buffer
@@ -46,12 +45,11 @@ func getSambaLastUpdate() string {
 	return strings.TrimSpace(out.String())
 }
 
-// checkSambaDependencies checks if all Samba dependencies are installed
-func checkSambaDependencies() bool {
+// CheckSambaDependencies checks if all Samba dependencies are installed
+func CheckSambaDependencies() bool {
 	deps := []string{
 		"winbind",
-		"libnss-winbind",
-		"libpam-winbind",
+		"krb5-user",
 	}
 
 	for _, dep := range deps {
@@ -63,8 +61,8 @@ func checkSambaDependencies() bool {
 	return true
 }
 
-// getHeadscaleVersion returns the installed Headscale version
-func getHeadscaleVersion() string {
+// GetHeadscaleVersion returns the installed Headscale version
+func GetHeadscaleVersion() string {
 	cmd := exec.Command("headscale", "version")
 	var out bytes.Buffer
 	cmd.Stdout = &out
@@ -74,16 +72,15 @@ func getHeadscaleVersion() string {
 	return strings.TrimSpace(out.String())
 }
 
-// checkHeadscaleUpdates checks if Headscale updates are available
-func checkHeadscaleUpdates() string {
-	// Check GitHub releases for newer version
+// CheckHeadscaleUpdates checks if Headscale updates are available
+func CheckHeadscaleUpdates() string {
 	// For now, just return up_to_date
 	return "up_to_date"
 }
 
-// getHeadscaleLastUpdate returns when Headscale was last updated
-func getHeadscaleLastUpdate() string {
-	cmd := exec.Command("stat", "-c", "%y", "/usr/bin/headscale")
+// GetHeadscaleLastUpdate returns when Headscale was last updated
+func GetHeadscaleLastUpdate() string {
+	cmd := exec.Command("stat", "-c", "%y", "/usr/local/bin/headscale")
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
@@ -92,44 +89,19 @@ func getHeadscaleLastUpdate() string {
 	return strings.TrimSpace(out.String())
 }
 
-// checkHeadscaleDependencies checks if all Headscale dependencies are installed
-func checkHeadscaleDependencies() bool {
-	// Check if required services are running
+// CheckHeadscaleDependencies checks if all Headscale dependencies are installed
+func CheckHeadscaleDependencies() bool {
+	// Check if required services are available
 	services := []string{
 		"headscale",
 		"tailscaled",
 	}
 
 	for _, svc := range services {
-		cmd := exec.Command("systemctl", "is-active", svc)
+		cmd := exec.Command("systemctl", "is-enabled", svc)
 		if err := cmd.Run(); err != nil {
 			return false
 		}
 	}
 	return true
-}
-
-// UpdateSystem performs system-wide updates
-func UpdateSystem() error {
-	// Update package lists
-	if err := exec.Command("apt", "update").Run(); err != nil {
-		return fmt.Errorf("failed to update package lists: %v", err)
-	}
-
-	// Update Samba
-	if err := exec.Command("apt", "install", "-y", "samba").Run(); err != nil {
-		return fmt.Errorf("failed to update samba: %v", err)
-	}
-
-	// Update Headscale (would need to implement GitHub release download)
-
-	// Restart services
-	services := []string{"samba", "winbind", "headscale", "tailscaled"}
-	for _, svc := range services {
-		if err := exec.Command("systemctl", "restart", svc).Run(); err != nil {
-			return fmt.Errorf("failed to restart %s: %v", svc, err)
-		}
-	}
-
-	return nil
 }

@@ -77,8 +77,21 @@ func (s *GroupService) GetGroup(groupName string) (*models.Group, error) {
 
 // UpdateGroup updates an existing group
 func (s *GroupService) UpdateGroup(groupName string, req models.UpdateGroupRequest) error {
-	// TODO: Implement group update logic
-	return fmt.Errorf("group update not implemented yet")
+	// Development mode: Simulate update
+	if os.Getenv("ENV") == "development" {
+		return nil
+	}
+
+	// Update description if provided
+	if req.Description != nil {
+		// Use samba-tool to update group description
+		output, err := s.sambaTool.GroupModify(groupName, *req.Description)
+		if err != nil {
+			return fmt.Errorf("failed to update group: %s", output)
+		}
+	}
+
+	return nil
 }
 
 // DeleteGroup removes a group from the domain

@@ -9,7 +9,7 @@ import (
 	"github.com/vexa/api/middleware"
 )
 
-const Version = "0.0.4"
+const Version = "0.1.6"
 
 func main() {
 	// Set Gin mode
@@ -19,11 +19,11 @@ func main() {
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler()
-	systemHandler := handlers.NewSystemHandler()
 	userHandler := handlers.NewUserHandler()
 	groupHandler := handlers.NewGroupHandler()
 	domainHandler := handlers.NewDomainHandler()
 	computerHandler := handlers.NewComputerHandler()
+	overlayHandler := handlers.NewOverlayHandler()
 
 	router := gin.Default()
 
@@ -43,7 +43,6 @@ func main() {
 	public := router.Group("/api/v1")
 	{
 		public.POST("/auth/login", authHandler.Login)
-		public.GET("/system/status", systemHandler.SystemStatus)
 		public.GET("/version", func(c *gin.Context) {
 			c.JSON(200, gin.H{
 				"version": Version,
@@ -106,9 +105,6 @@ func main() {
 		protected.POST("/domain/ous", handlers.CreateOU)
 		protected.DELETE("/domain/ous/:path", handlers.DeleteOU)
 
-		// System services
-		protected.GET("/system/services/:name", systemHandler.GetServiceStatus)
-
 		// Computer deployment
 		deploymentHandler := handlers.NewDeploymentHandler()
 		protected.GET("/deployment/scripts", deploymentHandler.GetDeploymentScripts)
@@ -120,8 +116,8 @@ func main() {
 		protected.GET("/audit/events", handlers.GetAuditEvents)
 
 		// Overlay Networking (Headscale)
-		protected.GET("/system/overlay-status", handlers.GetOverlayStatus)
-		protected.POST("/system/setup-overlay", handlers.SetupOverlay)
+		protected.GET("/system/overlay-status", overlayHandler.GetOverlayStatus)
+		protected.POST("/system/setup-overlay", overlayHandler.SetupOverlay)
 	}
 
 	// Start server

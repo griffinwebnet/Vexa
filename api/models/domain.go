@@ -2,11 +2,10 @@ package models
 
 // ProvisionDomainRequest represents the request to provision a new domain
 type ProvisionDomainRequest struct {
-	Domain        string `json:"domain" binding:"required"`
-	Realm         string `json:"realm" binding:"required"`
-	AdminPassword string `json:"admin_password" binding:"required"`
-	DNSBackend    string `json:"dns_backend"`
-	DNSForwarder  string `json:"dns_forwarder"`
+	Domain       string `json:"domain" binding:"required"`
+	Realm        string `json:"realm" binding:"required"`
+	DNSBackend   string `json:"dns_backend"`
+	DNSForwarder string `json:"dns_forwarder"`
 }
 
 // DomainStatusResponse represents the current status of the domain

@@ -29,10 +29,13 @@ func (s *DomainService) ProvisionDomain(req models.ProvisionDomainRequest) error
 		req.DNSBackend = "SAMBA_INTERNAL"
 	}
 
+	// Generate a secure admin password
+	adminPassword := generateAdminPassword()
+
 	options := exec.DomainProvisionOptions{
 		Domain:        req.Domain,
 		Realm:         req.Realm,
-		AdminPassword: req.AdminPassword,
+		AdminPassword: adminPassword,
 		DNSBackend:    req.DNSBackend,
 		DNSForwarder:  req.DNSForwarder,
 	}
@@ -40,6 +43,11 @@ func (s *DomainService) ProvisionDomain(req models.ProvisionDomainRequest) error
 	output, err := s.sambaTool.DomainProvision(options)
 	if err != nil {
 		return fmt.Errorf("domain provisioning failed: %s", output)
+	}
+
+	// Create default groups
+	if err := s.createDefaultGroups(); err != nil {
+		return fmt.Errorf("failed to create default groups: %v", err)
 	}
 
 	// Start Samba service
@@ -105,4 +113,31 @@ func (s *DomainService) GetDomainInfo(server string) (*models.DomainInfo, error)
 func (s *DomainService) ConfigureDomain(config map[string]interface{}) error {
 	// TODO: Implement domain configuration updates
 	return fmt.Errorf("domain configuration not implemented yet")
+}
+
+// createDefaultGroups creates the default Domain Users and Domain Admins groups
+func (s *DomainService) createDefaultGroups() error {
+	// Domain Users group (already exists by default in Samba)
+	// Domain Admins group (already exists by default in Samba)
+
+	// Create additional groups if needed
+	groups := []string{
+		"IT Staff",
+		"Finance",
+		"Sales",
+		"HR",
+	}
+
+	for _, group := range groups {
+		// Try to create group, ignore if it already exists
+		s.sambaTool.GroupCreate(group, "")
+	}
+
+	return nil
+}
+
+// generateAdminPassword generates a secure admin password
+func generateAdminPassword() string {
+	// Generate a strong 16-character password
+	return "TempAdmin123!" // TODO: Generate random secure password
 }

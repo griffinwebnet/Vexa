@@ -7,14 +7,40 @@ import (
 	"os/exec"
 
 	"github.com/gin-gonic/gin"
-	"github.com/vexa/api/models"
 )
+
+// Word lists for password generation
+var adjectives = []string{
+	"Summer", "Winter", "Autumn", "Spring", "Crystal", "Golden", "Silver",
+	"Mighty", "Swift", "Brave", "Noble", "Wise", "Azure", "Crimson",
+	"Emerald", "Violet", "Amber", "Sapphire", "Ruby", "Diamond",
+}
+
+var nouns = []string{
+	"Lilypad", "Mountain", "River", "Ocean", "Forest", "Meadow", "Valley",
+	"Phoenix", "Dragon", "Eagle", "Tiger", "Falcon", "Panther", "Wolf",
+	"Thunder", "Lightning", "Storm", "Breeze", "Sunrise", "Sunset",
+}
+
+var symbols = []string{"!", "@", "#", "$", "%", "&", "*"}
+
+// ChangePasswordRequest represents a password change request
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
+// UpdateProfileRequest represents a profile update request
+type UpdateProfileRequest struct {
+	FullName string `json:"full_name"`
+	Email    string `json:"email"`
+}
 
 // ChangePassword changes a user's password
 func ChangePassword(c *gin.Context) {
 	username := c.GetString("username") // From JWT auth middleware
 
-	var req models.ChangePasswordRequest
+	var req ChangePasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Invalid request format",
@@ -51,7 +77,7 @@ func ChangePassword(c *gin.Context) {
 func UpdateProfile(c *gin.Context) {
 	username := c.GetString("username") // From JWT auth middleware
 
-	var req models.UpdateProfileRequest
+	var req UpdateProfileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Invalid request format",

@@ -21,8 +21,8 @@ type UpdateProgress struct {
 	Completed bool   `json:"completed"` // whether update is complete
 }
 
-// UpdateSystem starts a system update via the CLI tool
-func UpdateSystem(buildFromSource bool) error {
+// StartSystemUpdate starts a system update via the CLI tool
+func StartSystemUpdate(buildFromSource bool) error {
 	args := []string{"update", "start"}
 	if buildFromSource {
 		args = append(args, "--build-source")

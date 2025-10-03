@@ -77,22 +77,6 @@ func CheckForUpdates(c *gin.Context) {
 			Dependencies:    true,
 			RequiresRestart: true,
 		},
-		{
-			Component:       "samba",
-			Version:         services.GetSambaVersion(),
-			UpdateStatus:    services.CheckSambaUpdates(),
-			LastUpdated:     services.GetSambaLastUpdate(),
-			Dependencies:    services.CheckSambaDependencies(),
-			RequiresRestart: true,
-		},
-		{
-			Component:       "headscale",
-			Version:         services.GetHeadscaleVersion(),
-			UpdateStatus:    services.CheckHeadscaleUpdates(),
-			LastUpdated:     services.GetHeadscaleLastUpdate(),
-			Dependencies:    services.CheckHeadscaleDependencies(),
-			RequiresRestart: true,
-		},
 	}
 
 	// Get repository info
@@ -290,7 +274,7 @@ func PerformUpgrade(c *gin.Context) {
 	}
 
 	// Start update via CLI
-	if err := services.UpdateSystem(req.BuildFromSource); err != nil {
+	if err := services.StartSystemUpdate(req.BuildFromSource); err != nil {
 		c.JSON(http.StatusInternalServerError, UpgradeResponse{
 			Success: false,
 			Error:   err.Error(),

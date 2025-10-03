@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/Dialog'
-import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/Dialog'
+import { Button } from '../ui/Button'
+import { Input } from '../ui/Input'
 
 interface ManageGroupModalProps {
   open: boolean

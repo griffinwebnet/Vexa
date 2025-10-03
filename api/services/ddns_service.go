@@ -5,20 +5,19 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"text/template"
 )
 
 // DDNSProvider represents a DDNS provider configuration
 type DDNSProvider struct {
-	Name     string `json:"name"`     // Provider name (cloudflare, dynu)
+	Name     string `json:"name"`     // Provider name (cloudflare, dynu, duckdns)
 	Enabled  bool   `json:"enabled"`  // Whether DDNS is enabled
 	Domain   string `json:"domain"`   // Domain to update
-	Username string `json:"username"` // API username/token
+	Username string `json:"username"` // API username/email/token
 	Password string `json:"password"` // API password/key
 	Interval int    `json:"interval"` // Update interval in minutes
 }
 
-// DDNSService handles dynamic DNS updates
+// DDNSService handles dynamic DNS updates using ddclient
 type DDNSService struct{}
 
 // NewDDNSService creates a new DDNSService
@@ -26,27 +25,93 @@ func NewDDNSService() *DDNSService {
 	return &DDNSService{}
 }
 
-// SetupDDNS configures and starts DDNS updates
+// SetupDDNS configures ddclient for DDNS updates
 func (s *DDNSService) SetupDDNS(provider *DDNSProvider) error {
 	// Save config
 	if err := s.saveConfig(provider); err != nil {
 		return err
 	}
 
-	// Configure ddclient
-	if err := s.configureDDClient(provider); err != nil {
+	// Create ddclient config
+	if err := s.createDDClientConfig(provider); err != nil {
 		return err
 	}
 
-	// Start/stop service based on enabled flag
+	// Start/stop service based on enabled state
 	if provider.Enabled {
 		if err := exec.Command("systemctl", "enable", "--now", "ddclient").Run(); err != nil {
-			return fmt.Errorf("failed to start DDNS service: %v", err)
+			return fmt.Errorf("failed to start ddclient: %v", err)
 		}
 	} else {
 		if err := exec.Command("systemctl", "disable", "--now", "ddclient").Run(); err != nil {
-			return fmt.Errorf("failed to stop DDNS service: %v", err)
+			return fmt.Errorf("failed to stop ddclient: %v", err)
 		}
+	}
+
+	return nil
+}
+
+// createDDClientConfig creates ddclient configuration
+func (s *DDNSService) createDDClientConfig(provider *DDNSProvider) error {
+	var config string
+
+	switch provider.Name {
+	case "cloudflare":
+		config = fmt.Sprintf(`# ddclient configuration for Cloudflare
+daemon=%d
+syslog=yes
+ssl=yes
+use=web, web=https://api.ipify.org
+
+protocol=cloudflare
+zone=%s
+ttl=300
+%s=%s`,
+			provider.Interval*60, // Convert minutes to seconds
+			provider.Domain,
+			provider.Username, // email
+			provider.Password) // API key
+
+	case "dynu":
+		config = fmt.Sprintf(`# ddclient configuration for Dynu
+daemon=%d
+syslog=yes
+ssl=yes
+use=web, web=https://api.ipify.org
+
+protocol=dyndns2
+server=api.dynu.com
+login=%s
+password=%s
+%s`,
+			provider.Interval*60,
+			provider.Username,
+			provider.Password,
+			provider.Domain)
+
+	case "duckdns":
+		config = fmt.Sprintf(`# ddclient configuration for DuckDNS
+daemon=%d
+syslog=yes
+ssl=yes
+use=web, web=https://api.ipify.org
+
+protocol=duckdns
+server=www.duckdns.org
+login=nouser
+password=%s
+%s`,
+			provider.Interval*60,
+			provider.Password, // token
+			provider.Domain)
+
+	default:
+		return fmt.Errorf("unsupported DDNS provider: %s", provider.Name)
+	}
+
+	// Write config
+	if err := os.WriteFile("/etc/ddclient.conf", []byte(config), 0600); err != nil {
+		return err
 	}
 
 	return nil
@@ -60,62 +125,6 @@ func (s *DDNSService) saveConfig(provider *DDNSProvider) error {
 	}
 
 	return os.WriteFile("/etc/vexa/ddns.json", data, 0600)
-}
-
-// configureDDClient sets up ddclient configuration
-func (s *DDNSService) configureDDClient(provider *DDNSProvider) error {
-	// Create config from template
-	tmpl := template.Must(template.New("config").Parse(`# ddclient configuration for Vexa
-daemon={{ .Interval }}
-use=web, web=checkip.dyndns.org/, web-skip='IP Address'
-ssl=yes
-
-{{ if eq .Name "cloudflare" }}
-protocol=cloudflare
-zone={{ .Domain }}
-login={{ .Username }}
-password={{ .Password }}
-{{ .Domain }}
-
-{{ else if eq .Name "dynu" }}
-protocol=dyndns2
-server=api.dynu.com
-login={{ .Username }}
-password={{ .Password }}
-{{ .Domain }}
-
-{{ else if eq .Name "duckdns" }}
-protocol=duckdns
-server=www.duckdns.org
-login={{ .Username }}
-password={{ .Password }}
-{{ .Domain }}
-
-{{ else if eq .Name "noip" }}
-protocol=noip
-server=dynupdate.no-ip.com
-login={{ .Username }}
-password={{ .Password }}
-{{ .Domain }}
-
-{{ end }}`))
-
-	f, err := os.Create("/etc/ddclient.conf")
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	if err := tmpl.Execute(f, provider); err != nil {
-		return err
-	}
-
-	// Set permissions
-	if err := os.Chmod("/etc/ddclient.conf", 0600); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // GetDDNSConfig returns current DDNS configuration

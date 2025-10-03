@@ -8,32 +8,39 @@ export default function DomainSetup() {
   const [formData, setFormData] = useState({
     domain: '',
     realm: '',
-    admin_password: '',
-    confirm_password: '',
-    dns_forwarder: '8.8.8.8',
+    dns_provider: 'cloudflare',
+    dns_forwarder: '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+
+  const dnsProviders = [
+    { value: 'cloudflare', label: 'Cloudflare (1.1.1.1)', servers: '1.1.1.1,1.0.0.1' },
+    { value: 'google', label: 'Google (8.8.8.8)', servers: '8.8.8.8,8.8.4.4' },
+    { value: 'quad9', label: 'Quad9 (9.9.9.9)', servers: '9.9.9.9,149.112.112.112' },
+    { value: 'custom', label: 'Custom DNS Servers', servers: '' },
+  ]
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     setSuccess(false)
 
-    if (formData.admin_password !== formData.confirm_password) {
-      setError('Passwords do not match')
-      return
-    }
-
     setLoading(true)
 
     try {
+      // Get DNS servers based on provider
+      let dnsServers = formData.dns_forwarder
+      if (formData.dns_provider !== 'custom') {
+        const provider = dnsProviders.find(p => p.value === formData.dns_provider)
+        dnsServers = provider?.servers || '1.1.1.1,1.0.0.1'
+      }
+
       await api.post('/domain/provision', {
         domain: formData.domain,
         realm: formData.realm,
-        admin_password: formData.admin_password,
-        dns_forwarder: formData.dns_forwarder,
+        dns_forwarder: dnsServers,
       })
 
       setSuccess(true)
@@ -81,9 +88,12 @@ export default function DomainSetup() {
               <h3 className="text-lg font-semibold mb-2">
                 Domain Provisioned Successfully!
               </h3>
-              <p className="text-muted-foreground">
-                Your Vexa Domain controller is now running
+              <p className="text-muted-foreground mb-4">
+                Your Vexa Domain controller is now running. You can now create users and manage your domain.
               </p>
+              <Button onClick={() => window.location.href = '/dashboard'}>
+                Go to Dashboard
+              </Button>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -126,57 +136,46 @@ export default function DomainSetup() {
               </div>
 
               <div className="space-y-2">
-                <label htmlFor="admin_password" className="text-sm font-medium">
-                  Administrator Password
+                <label htmlFor="dns_provider" className="text-sm font-medium">
+                  DNS Provider
                 </label>
-                <Input
-                  id="admin_password"
-                  type="password"
-                  placeholder="Enter strong password"
-                  value={formData.admin_password}
-                  onChange={(e) =>
-                    setFormData({ ...formData, admin_password: e.target.value })
-                  }
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="confirm_password" className="text-sm font-medium">
-                  Confirm Password
-                </label>
-                <Input
-                  id="confirm_password"
-                  type="password"
-                  placeholder="Confirm password"
-                  value={formData.confirm_password}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      confirm_password: e.target.value,
-                    })
-                  }
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="dns_forwarder" className="text-sm font-medium">
-                  DNS Forwarder
-                </label>
-                <Input
-                  id="dns_forwarder"
-                  type="text"
-                  placeholder="8.8.8.8"
-                  value={formData.dns_forwarder}
-                  onChange={(e) =>
-                    setFormData({ ...formData, dns_forwarder: e.target.value })
-                  }
-                />
+                <select
+                  id="dns_provider"
+                  value={formData.dns_provider}
+                  onChange={(e) => setFormData({ ...formData, dns_provider: e.target.value })}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {dnsProviders.map((provider) => (
+                    <option key={provider.value} value={provider.value}>
+                      {provider.label}
+                    </option>
+                  ))}
+                </select>
                 <p className="text-xs text-muted-foreground">
-                  External DNS server for forwarding (optional)
+                  DNS provider for upstream queries
                 </p>
               </div>
+
+              {formData.dns_provider === 'custom' && (
+                <div className="space-y-2">
+                  <label htmlFor="dns_forwarder" className="text-sm font-medium">
+                    Custom DNS Servers
+                  </label>
+                  <Input
+                    id="dns_forwarder"
+                    type="text"
+                    placeholder="8.8.8.8,8.8.4.4"
+                    value={formData.dns_forwarder}
+                    onChange={(e) =>
+                      setFormData({ ...formData, dns_forwarder: e.target.value })
+                    }
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Comma-separated list of DNS servers
+                  </p>
+                </div>
+              )}
 
               {error && (
                 <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
