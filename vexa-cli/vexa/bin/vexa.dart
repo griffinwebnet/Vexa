@@ -16,7 +16,7 @@ void main(List<String> arguments) async {
 
   if (results['help'] as bool || arguments.isEmpty) {
     print('Vexa CLI - Update Helper');
-    print('Version: 0.1.12');
+    print('Version: 0.1.13');
     print('');
     print('Usage: vexa <command>');
     print('');
