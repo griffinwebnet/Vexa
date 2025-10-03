@@ -3,7 +3,7 @@ set -e
 
 # Vexa Update Script
 echo "======================================"
-echo "  Vexa Update Script  v0.1.19"
+echo "  Vexa Update Script  v0.1.20"
 echo "======================================"
 echo ""
 
