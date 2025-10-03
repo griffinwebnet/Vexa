@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vexa/api/models"
@@ -94,4 +95,52 @@ func (h *DomainHandler) ConfigureDomain(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Domain configuration updated successfully",
 	})
+}
+
+// ProvisionDomainWithOutput provisions a new domain with streaming CLI output
+func (h *DomainHandler) ProvisionDomainWithOutput(c *gin.Context) {
+	var req models.ProvisionDomainRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid request format",
+		})
+		return
+	}
+
+	// Set up Server-Sent Events
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("Access-Control-Allow-Headers", "Cache-Control")
+
+	// Create a channel for CLI output
+	outputChan := make(chan string, 100)
+
+	// Start provisioning in a goroutine
+	go func() {
+		defer close(outputChan)
+		err := h.domainService.ProvisionDomainWithOutput(req, outputChan)
+		if err != nil {
+			outputChan <- "ERROR: " + err.Error()
+		}
+	}()
+
+	// Stream output to client
+	for output := range outputChan {
+		c.SSEvent("message", gin.H{
+			"type":      "output",
+			"content":   output,
+			"timestamp": time.Now().Unix(),
+		})
+		c.Writer.Flush()
+	}
+
+	// Send completion event
+	c.SSEvent("message", gin.H{
+		"type":      "complete",
+		"content":   "Domain provisioning completed",
+		"timestamp": time.Now().Unix(),
+	})
+	c.Writer.Flush()
 }

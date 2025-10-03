@@ -1,6 +1,7 @@
 package exec
 
 import (
+	"bufio"
 	"os/exec"
 	"strings"
 )
@@ -141,6 +142,67 @@ func (s *SambaTool) DomainProvision(options DomainProvisionOptions) (string, err
 	cmd := exec.Command("samba-tool", args...)
 	output, err := cmd.CombinedOutput()
 	return string(output), err
+}
+
+// DomainProvisionWithOutput provisions a new domain with streaming output
+func (s *SambaTool) DomainProvisionWithOutput(options DomainProvisionOptions, outputChan chan<- string) (string, error) {
+	args := []string{
+		"domain", "provision",
+		"--realm=" + options.Realm,
+		"--domain=" + options.Domain,
+		"--adminpass=" + options.AdminPassword,
+		"--server-role=dc",
+		"--dns-backend=" + options.DNSBackend,
+		"--use-rfc2307",
+	}
+
+	if options.DNSForwarder != "" {
+		args = append(args, "--option=dns forwarder = "+options.DNSForwarder)
+	}
+
+	// Run provision command with streaming output
+	cmd := exec.Command("samba-tool", args...)
+
+	// Create a pipe for stdout
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", err
+	}
+
+	// Create a pipe for stderr
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return "", err
+	}
+
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		return "", err
+	}
+
+	// Stream stdout
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			outputChan <- "STDOUT: " + scanner.Text()
+		}
+	}()
+
+	// Stream stderr
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			outputChan <- "STDERR: " + scanner.Text()
+		}
+	}()
+
+	// Wait for command to complete
+	err = cmd.Wait()
+
+	var output strings.Builder
+	output.WriteString("Command completed")
+
+	return output.String(), err
 }
 
 // DomainInfo gets domain information

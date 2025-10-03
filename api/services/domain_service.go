@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/vexa/api/exec"
 	"github.com/vexa/api/models"
@@ -137,6 +138,121 @@ func (s *DomainService) createDefaultGroups() error {
 			Description: "", // Empty description for default groups
 		}
 		s.sambaTool.GroupCreate(group, options)
+	}
+
+	return nil
+}
+
+// ProvisionDomainWithOutput provisions a new domain with streaming CLI output
+func (s *DomainService) ProvisionDomainWithOutput(req models.ProvisionDomainRequest, outputChan chan<- string) error {
+	// Set defaults
+	if req.DNSBackend == "" {
+		req.DNSBackend = "SAMBA_INTERNAL"
+	}
+
+	outputChan <- "Starting domain provisioning..."
+	outputChan <- fmt.Sprintf("Domain: %s, Realm: %s", req.Domain, req.Realm)
+
+	// Clean up existing Samba configuration to avoid conflicts
+	outputChan <- "Cleaning up existing Samba configuration..."
+	s.system.RemoveFile("/etc/samba/smb.conf")
+	outputChan <- "Removed /etc/samba/smb.conf"
+
+	// Stop conflicting services
+	outputChan <- "Stopping conflicting services..."
+	services := []string{"smbd", "nmbd", "winbind", "samba-ad-dc"}
+	for _, service := range services {
+		outputChan <- fmt.Sprintf("Stopping %s...", service)
+		s.system.StopService(service)
+		time.Sleep(1 * time.Second) // Give services time to stop
+	}
+
+	// Clean up Samba databases completely to avoid corruption/bugs
+	outputChan <- "Cleaning up Samba databases..."
+	files := []string{
+		"/var/lib/samba/private/sam.ldb",
+		"/var/lib/samba/private/secrets.ldb",
+		"/var/cache/samba/gencache.tdb",
+	}
+	for _, file := range files {
+		outputChan <- fmt.Sprintf("Removing %s...", file)
+		s.system.RemoveFile(file)
+	}
+
+	// Generate a secure admin password
+	outputChan <- "Generating admin password..."
+	adminPassword := generateAdminPassword()
+	outputChan <- "Admin password generated"
+
+	options := exec.DomainProvisionOptions{
+		Domain:        req.Domain,
+		Realm:         req.Realm,
+		AdminPassword: adminPassword,
+		DNSBackend:    req.DNSBackend,
+		DNSForwarder:  req.DNSForwarder,
+	}
+
+	outputChan <- "Starting domain provision command..."
+	outputChan <- fmt.Sprintf("Command: samba-tool domain provision --realm=%s --domain=%s --server-role=dc --dns-backend=%s", req.Realm, req.Domain, req.DNSBackend)
+	if req.DNSForwarder != "" {
+		outputChan <- fmt.Sprintf("DNS Forwarder: %s", req.DNSForwarder)
+	}
+
+	output, err := s.sambaTool.DomainProvisionWithOutput(options, outputChan)
+	if err != nil {
+		outputChan <- fmt.Sprintf("ERROR: Domain provisioning failed: %s", output)
+		return fmt.Errorf("domain provisioning failed: %s", output)
+	}
+
+	outputChan <- "Domain provisioning completed successfully"
+	outputChan <- "Creating default groups..."
+
+	// Create default groups
+	if err := s.createDefaultGroupsWithOutput(outputChan); err != nil {
+		outputChan <- fmt.Sprintf("WARNING: Failed to create default groups: %v", err)
+		// Don't fail the entire operation for this
+	}
+
+	outputChan <- "Starting Samba AD DC service..."
+	// Start Samba service
+	if err := s.system.EnableAndStartService("samba-ad-dc"); err != nil {
+		outputChan <- fmt.Sprintf("ERROR: Failed to start Samba AD DC service: %v", err)
+		return fmt.Errorf("failed to start Samba AD DC service: %w", err)
+	}
+
+	outputChan <- "Samba AD DC service started successfully"
+	outputChan <- "Domain provisioning completed!"
+
+	return nil
+}
+
+// createDefaultGroupsWithOutput creates default groups with output streaming
+func (s *DomainService) createDefaultGroupsWithOutput(outputChan chan<- string) error {
+	// Domain Users group (already exists by default in Samba)
+	// Domain Admins group (already exists by default in Samba)
+
+	// Create additional groups if needed
+	groups := []string{
+		"IT Staff",
+		"Finance",
+		"Sales",
+		"HR",
+	}
+
+	for _, group := range groups {
+		outputChan <- fmt.Sprintf("Creating group: %s", group)
+		// Try to create group, ignore if it already exists
+		options := exec.GroupCreateOptions{
+			Description: "", // Empty description for default groups
+		}
+		output, err := s.sambaTool.GroupCreate(group, options)
+		if err != nil {
+			outputChan <- fmt.Sprintf("Group %s creation result: %s", group, output)
+			// Continue with other groups even if one fails
+		} else {
+			outputChan <- fmt.Sprintf("Group %s created successfully", group)
+		}
+		time.Sleep(500 * time.Millisecond) // Small delay between group creation
 	}
 
 	return nil

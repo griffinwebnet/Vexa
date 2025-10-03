@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
-import { Server, GitMerge, Plus } from 'lucide-react'
+import { Server, GitMerge, Plus, Copy, Terminal } from 'lucide-react'
 import api from '../lib/api'
 
 type SetupMode = 'new' | 'join' | 'migrate' | null
@@ -13,6 +13,9 @@ export default function SetupWizard() {
   const [mode, setMode] = useState<SetupMode>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [cliOutput, setCliOutput] = useState<string[]>([])
+  const [showOutput, setShowOutput] = useState(false)
+  const outputRef = useRef<HTMLDivElement>(null)
   
   const [formData, setFormData] = useState({
     realm: '',
@@ -37,6 +40,8 @@ export default function SetupWizard() {
   const handleSetupNew = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setCliOutput([])
+    setShowOutput(true)
 
     if (!formData.realm.trim()) {
       setError('Realm is required')
@@ -54,19 +59,73 @@ export default function SetupWizard() {
 
       const domainName = getDomainFromRealm(formData.realm)
       
-      await api.post('/domain/provision', {
-        domain: domainName,
-        realm: formData.realm,
-        dns_forwarder: dnsServers,
+      // Use the new streaming endpoint
+      const response = await fetch('/api/v1/domain/provision-with-output', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          domain: domainName,
+          realm: formData.realm,
+          dns_forwarder: dnsServers,
+        })
       })
-      
-      localStorage.setItem('vexa-setup-complete', 'true')
-      navigate('/')
+
+      if (!response.ok) {
+        throw new Error('Failed to start provisioning')
+      }
+
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          const chunk = decoder.decode(value)
+          const lines = chunk.split('\n')
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6))
+                if (data.type === 'output') {
+                  setCliOutput(prev => [...prev, data.content])
+                  // Auto-scroll to bottom
+                  setTimeout(() => {
+                    if (outputRef.current) {
+                      outputRef.current.scrollTop = outputRef.current.scrollHeight
+                    }
+                  }, 100)
+                } else if (data.type === 'complete') {
+                  localStorage.setItem('vexa-setup-complete', 'true')
+                  navigate('/')
+                }
+              } catch (e) {
+                // Ignore parsing errors for incomplete chunks
+              }
+            }
+          }
+        }
+      }
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to provision domain')
+      setError(err.message || 'Failed to provision domain')
+      setCliOutput(prev => [...prev, `ERROR: ${err.message || 'Unknown error'}`])
     } finally {
       setLoading(false)
     }
+  }
+
+  const copyOutputToClipboard = () => {
+    const outputText = cliOutput.join('\n')
+    navigator.clipboard.writeText(outputText).then(() => {
+      // Could add a toast notification here
+    }).catch(err => {
+      console.error('Failed to copy to clipboard:', err)
+    })
   }
 
   if (!mode) {
@@ -225,6 +284,49 @@ export default function SetupWizard() {
                 </div>
               )}
 
+              {showOutput && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium flex items-center gap-2">
+                      <Terminal className="h-4 w-4" />
+                      CLI Output
+                    </label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={copyOutputToClipboard}
+                      className="flex items-center gap-2"
+                    >
+                      <Copy className="h-4 w-4" />
+                      Copy
+                    </Button>
+                  </div>
+                  <div
+                    ref={outputRef}
+                    className="bg-black text-green-400 p-4 rounded-md font-mono text-sm h-64 overflow-y-auto border"
+                  >
+                    {cliOutput.length === 0 ? (
+                      <div className="text-gray-500">Waiting for output...</div>
+                    ) : (
+                      cliOutput.map((line, index) => (
+                        <div key={index} className="mb-1">
+                          {line.startsWith('ERROR:') ? (
+                            <span className="text-red-400">{line}</span>
+                          ) : line.startsWith('STDOUT:') ? (
+                            <span className="text-green-400">{line}</span>
+                          ) : line.startsWith('STDERR:') ? (
+                            <span className="text-yellow-400">{line}</span>
+                          ) : (
+                            <span>{line}</span>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-2 pt-4">
                 <Button type="button" variant="outline" onClick={() => setMode(null)}>
                   Back
@@ -232,6 +334,18 @@ export default function SetupWizard() {
                 <Button type="submit" className="flex-1" disabled={loading}>
                   {loading ? 'Provisioning...' : 'Provision Domain'}
                 </Button>
+                {!loading && showOutput && cliOutput.length > 0 && (
+                  <Button 
+                    type="button" 
+                    onClick={() => {
+                      localStorage.setItem('vexa-setup-complete', 'true')
+                      navigate('/')
+                    }}
+                    className="flex-1"
+                  >
+                    Continue to Dashboard
+                  </Button>
+                )}
               </div>
             </form>
           </CardContent>

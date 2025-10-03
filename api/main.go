@@ -13,7 +13,7 @@ import (
 // Global dev mode flag
 var DevMode bool
 
-const Version = "0.1.24"
+const Version = "0.1.25"
 
 func main() {
 	// Parse command line flags
@@ -67,6 +67,7 @@ func main() {
 	{
 		// Domain management
 		protected.POST("/domain/provision", domainHandler.ProvisionDomain)
+		protected.POST("/domain/provision-with-output", domainHandler.ProvisionDomainWithOutput)
 		protected.GET("/domain/status", domainHandler.DomainStatus)
 		protected.GET("/domain/info", domainHandler.GetDomainInfo)
 		protected.PUT("/domain/configure", domainHandler.ConfigureDomain)
