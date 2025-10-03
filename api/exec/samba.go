@@ -137,10 +137,10 @@ func (s *SambaTool) DomainProvision(options DomainProvisionOptions) (string, err
 		args = append(args, "--option=dns forwarder = "+options.DNSForwarder)
 	}
 
-	// Workaround for Samba 4.19.5 LXC bug: use simpler ACL backend
-	// acl_xattr crashes in LXC/Proxmox, use acl_tdb instead which stores ACLs in TDB
+	// Workaround for Samba 4.19.5 LXC bug: use minimal VFS chain with dfs_samba4
+	// The security context bug occurs in ACL manipulation regardless of backend
 	// See: https://bugzilla.samba.org/show_bug.cgi?id=15203
-	args = append(args, "--option=vfs objects = acl_tdb")
+	args = append(args, "--option=vfs objects = dfs_samba4")
 
 	// Run provision command
 	cmd := exec.Command("samba-tool", args...)
