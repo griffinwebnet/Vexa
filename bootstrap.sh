@@ -70,7 +70,7 @@ install_deps() {
             # Install dependencies
             DEBIAN_FRONTEND=noninteractive apt-get install -y \
                 samba \
-                samba-dc \
+                samba-dsdb-modules \
                 winbind \
                 krb5-user \
                 krb5-config \
@@ -83,7 +83,8 @@ install_deps() {
                 curl \
                 nginx \
                 ddclient \
-                jq
+                jq \
+                pamtester
             ;;
             
         rhel)
@@ -94,7 +95,7 @@ install_deps() {
                 # Install dependencies
                 dnf install -y \
                     samba \
-                    samba-dc \
+                    samba-dsdb-modules \
                     samba-winbind \
                     krb5-workstation \
                     krb5-server \
@@ -115,7 +116,7 @@ install_deps() {
                 
                 yum install -y \
                     samba \
-                    samba-dc \
+                    samba-dsdb-modules \
                     samba-winbind \
                     krb5-workstation \
                     krb5-server \
@@ -138,7 +139,7 @@ install_deps() {
             # Install dependencies
             zypper --non-interactive install \
                 samba \
-                samba-dc \
+                samba-dsdb-modules \
                 samba-winbind \
                 krb5 \
                 krb5-server \
