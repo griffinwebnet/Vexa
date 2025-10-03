@@ -58,6 +58,12 @@ export default function SetupWizard() {
 
       const domainName = getDomainFromRealm(formData.realm)
       
+      console.log('Starting domain provisioning with:', {
+        domain: domainName,
+        realm: formData.realm,
+        dns_forwarder: dnsServers
+      })
+      
       // Use the new streaming endpoint
       const response = await fetch('/api/v1/domain/provision-with-output', {
         method: 'POST',
@@ -72,8 +78,12 @@ export default function SetupWizard() {
         })
       })
 
+      console.log('Response status:', response.status, response.statusText)
+      
       if (!response.ok) {
-        throw new Error('Failed to start provisioning')
+        const errorText = await response.text()
+        console.error('API Error Response:', errorText)
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
 
       const reader = response.body?.getReader()
@@ -85,12 +95,14 @@ export default function SetupWizard() {
           if (done) break
 
           const chunk = decoder.decode(value)
+          console.log('Received chunk:', chunk)
           const lines = chunk.split('\n')
           
           for (const line of lines) {
             if (line.startsWith('data: ')) {
               try {
                 const data = JSON.parse(line.slice(6))
+                console.log('Parsed SSE data:', data)
                 if (data.type === 'output') {
                   setCliOutput(prev => [...prev, data.content])
                   // Auto-scroll to bottom
@@ -100,17 +112,19 @@ export default function SetupWizard() {
                     }
                   }, 100)
                 } else if (data.type === 'complete') {
+                  console.log('Provisioning completed successfully')
                   localStorage.setItem('vexa-setup-complete', 'true')
                   navigate('/')
                 }
               } catch (e) {
-                // Ignore parsing errors for incomplete chunks
+                console.error('Error parsing SSE data:', e, 'Line:', line)
               }
             }
           }
         }
       }
     } catch (err: any) {
+      console.error('Domain provisioning error:', err)
       setError(err.message || 'Failed to provision domain')
       setCliOutput(prev => [...prev, `ERROR: ${err.message || 'Unknown error'}`])
     } finally {

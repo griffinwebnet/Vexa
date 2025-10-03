@@ -153,6 +153,16 @@ func (s *DomainService) ProvisionDomainWithOutput(req models.ProvisionDomainRequ
 	outputChan <- "Starting domain provisioning..."
 	outputChan <- fmt.Sprintf("Domain: %s, Realm: %s", req.Domain, req.Realm)
 
+	// Check if samba-tool is available
+	outputChan <- "Checking if samba-tool is available..."
+	_, err := s.sambaTool.Run("--version")
+	if err != nil {
+		outputChan <- "ERROR: samba-tool not found or not accessible"
+		outputChan <- "ERROR: Please ensure Samba is installed: apt install samba samba-tools"
+		return fmt.Errorf("samba-tool not available: %v", err)
+	}
+	outputChan <- "samba-tool is available"
+
 	// Clean up existing Samba configuration to avoid conflicts
 	outputChan <- "Cleaning up existing Samba configuration..."
 	s.system.RemoveFile("/etc/samba/smb.conf")
@@ -201,6 +211,9 @@ func (s *DomainService) ProvisionDomainWithOutput(req models.ProvisionDomainRequ
 	output, err := s.sambaTool.DomainProvisionWithOutput(options, outputChan)
 	if err != nil {
 		outputChan <- fmt.Sprintf("ERROR: Domain provisioning failed: %s", output)
+		outputChan <- fmt.Sprintf("ERROR: Command exit code indicates failure")
+		outputChan <- fmt.Sprintf("ERROR: Check if samba-tool is installed and accessible")
+		outputChan <- fmt.Sprintf("ERROR: Verify system permissions for domain provisioning")
 		return fmt.Errorf("domain provisioning failed: %s", output)
 	}
 
