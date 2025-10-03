@@ -1,6 +1,6 @@
 name: vexa
 description: Vexa CLI - Directory Services Management Tool
-version: 0.1.23
+version: 0.1.24
 repository: https://github.com/griffinwebnet/Vexa
 
 environment:
