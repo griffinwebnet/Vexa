@@ -29,14 +29,18 @@ func (s *DomainService) ProvisionDomain(req models.ProvisionDomainRequest) error
 	}
 
 	// Clean up existing Samba configuration to avoid conflicts
-	if err := s.system.RemoveFile("/etc/samba/smb.conf"); err != nil {
-		// Ignore error if file doesn't exist
-	}
+	s.system.RemoveFile("/etc/samba/smb.conf")
 
 	// Stop conflicting services
 	s.system.StopService("smbd")
 	s.system.StopService("nmbd")
 	s.system.StopService("winbind")
+	s.system.StopService("samba-ad-dc")
+
+	// Clean up Samba databases completely to avoid corruption/bugs
+	s.system.RemoveFile("/var/lib/samba/private/sam.ldb")
+	s.system.RemoveFile("/var/lib/samba/private/secrets.ldb")
+	s.system.RemoveFile("/var/cache/samba/gencache.tdb")
 
 	// Generate a secure admin password
 	adminPassword := generateAdminPassword()

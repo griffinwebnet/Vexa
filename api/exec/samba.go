@@ -3,6 +3,7 @@ package exec
 import (
 	"os/exec"
 	"strings"
+	"syscall"
 )
 
 // SambaTool provides an interface for executing samba-tool commands
@@ -131,7 +132,6 @@ func (s *SambaTool) DomainProvision(options DomainProvisionOptions) (string, err
 		"--server-role=dc",
 		"--dns-backend=" + options.DNSBackend,
 		"--use-rfc2307",
-		"--use-ntvfs", // Use NTVFS instead of s3fs to avoid security context bug
 	}
 
 	if options.DNSForwarder != "" {
