@@ -4,49 +4,60 @@ import 'package:vexa/vexa.dart' as vexa;
 
 void main(List<String> arguments) async {
   final parser = ArgParser()
-    ..addCommand('update')
-    ..addCommand('upgrade')
-    ..addCommand('status')
-    ..addCommand('restart')
+    ..addCommand('update', ArgParser()
+      ..addCommand('start', ArgParser()
+        ..addFlag('build-source', help: 'Build from source instead of using releases'))
+      ..addCommand('status', ArgParser()
+        ..addFlag('json', help: 'Output status as JSON'))
+      ..addCommand('log'))
     ..addFlag('help', abbr: 'h', help: 'Show help information');
 
   final results = parser.parse(arguments);
 
   if (results['help'] as bool || arguments.isEmpty) {
-    print('Vexa CLI - Directory Services Management Tool');
+    print('Vexa CLI - Update Helper');
     print('Version: 0.0.4');
     print('');
     print('Usage: vexa <command>');
     print('');
     print('Commands:');
-    print('  update    Check for available updates');
-    print('  upgrade   Install updates and restart services');
-    print('  status    Show system status');
-    print('  restart   Restart all Vexa services');
+    print('  update start [--build-source]  Start update process');
+    print('  update status [--json]         Show update status');
+    print('  update log                     Show update log');
     print('');
     print('Examples:');
-    print('  vexa update');
-    print('  vexa upgrade');
-    print('  vexa status');
+    print('  vexa update start              Update using latest release');
+    print('  vexa update start --build-source  Update by building from source');
+    print('  vexa update status --json      Get update status as JSON');
     return;
   }
 
   try {
-    switch (results.command?.name) {
-      case 'update':
-        await vexa.checkForUpdates();
+    final command = results.command;
+    if (command?.name != 'update') {
+      print('Unknown command: ${command?.name}');
+      print('Use "vexa --help" for available commands');
+      exit(1);
+    }
+
+    final subCommand = command?.command;
+    switch (subCommand?.name) {
+      case 'start':
+        final buildSource = subCommand?['build-source'] as bool? ?? false;
+        await vexa.startUpdate(buildSource);
         break;
-      case 'upgrade':
-        await vexa.performUpgrade();
-        break;
+
       case 'status':
-        await vexa.showStatus();
+        final asJson = subCommand?['json'] as bool? ?? false;
+        await vexa.showStatus(asJson);
         break;
-      case 'restart':
-        await vexa.restartServices();
+
+      case 'log':
+        await vexa.showLog();
         break;
+
       default:
-        print('Unknown command: ${results.command?.name}');
+        print('Unknown update command: ${subCommand?.name}');
         print('Use "vexa --help" for available commands');
         exit(1);
     }

@@ -5,25 +5,86 @@ import (
 	"math/big"
 	"net/http"
 	"os/exec"
-	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/vexa/api/models"
 )
 
-// Word lists for password generation
-var adjectives = []string{
-	"Summer", "Winter", "Autumn", "Spring", "Crystal", "Golden", "Silver",
-	"Mighty", "Swift", "Brave", "Noble", "Wise", "Azure", "Crimson",
-	"Emerald", "Violet", "Amber", "Sapphire", "Ruby", "Diamond",
+// ChangePassword changes a user's password
+func ChangePassword(c *gin.Context) {
+	username := c.GetString("username") // From JWT auth middleware
+
+	var req models.ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid request format",
+		})
+		return
+	}
+
+	// Verify current password
+	cmd := exec.Command("smbclient", "-L", "localhost", "-U", username+"%"+req.CurrentPassword)
+	if err := cmd.Run(); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "Current password is incorrect",
+		})
+		return
+	}
+
+	// Change password
+	cmd = exec.Command("samba-tool", "user", "setpassword", username, "--newpassword="+req.NewPassword)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to change password",
+			"details": string(output),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Password changed successfully",
+	})
 }
 
-var nouns = []string{
-	"Lilypad", "Mountain", "River", "Ocean", "Forest", "Meadow", "Valley",
-	"Phoenix", "Dragon", "Eagle", "Tiger", "Falcon", "Panther", "Wolf",
-	"Thunder", "Lightning", "Storm", "Breeze", "Sunrise", "Sunset",
-}
+// UpdateProfile updates a user's profile information
+func UpdateProfile(c *gin.Context) {
+	username := c.GetString("username") // From JWT auth middleware
 
-var symbols = []string{"!", "@", "#", "$", "%", "&", "*"}
+	var req models.UpdateProfileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid request format",
+		})
+		return
+	}
+
+	// Update display name
+	if req.FullName != "" {
+		cmd := exec.Command("samba-tool", "user", "edit", username, "--editor=/bin/echo", "--full-name="+req.FullName)
+		if err := cmd.Run(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to update display name",
+			})
+			return
+		}
+	}
+
+	// Update email
+	if req.Email != "" {
+		cmd := exec.Command("samba-tool", "user", "edit", username, "--editor=/bin/echo", "--mail-address="+req.Email)
+		if err := cmd.Run(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to update email",
+			})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Profile updated successfully",
+	})
+}
 
 // ResetUserPassword generates a new random password and resets the user's password
 func ResetUserPassword(c *gin.Context) {
@@ -93,26 +154,23 @@ func EnableUser(c *gin.Context) {
 	})
 }
 
-// generatePassword creates a random password like "SummerLilypad&216"
+// generatePassword generates a secure random password
 func generatePassword() string {
-	// Random adjective
-	adjIdx, _ := rand.Int(rand.Reader, big.NewInt(int64(len(adjectives))))
-	adj := adjectives[adjIdx.Int64()]
+	// Get random adjective
+	adjIndex, _ := rand.Int(rand.Reader, big.NewInt(int64(len(adjectives))))
+	adj := adjectives[adjIndex.Int64()]
 
-	// Random noun
-	nounIdx, _ := rand.Int(rand.Reader, big.NewInt(int64(len(nouns))))
-	noun := nouns[nounIdx.Int64()]
+	// Get random noun
+	nounIndex, _ := rand.Int(rand.Reader, big.NewInt(int64(len(nouns))))
+	noun := nouns[nounIndex.Int64()]
 
-	// Random symbol
-	symIdx, _ := rand.Int(rand.Reader, big.NewInt(int64(len(symbols))))
-	symbol := symbols[symIdx.Int64()]
+	// Get random symbol
+	symIndex, _ := rand.Int(rand.Reader, big.NewInt(int64(len(symbols))))
+	sym := symbols[symIndex.Int64()]
 
-	// Random 3-digit number
+	// Get random number between 100-999
 	num, _ := rand.Int(rand.Reader, big.NewInt(900))
-	number := num.Int64() + 100 // Ensures 3 digits (100-999)
+	num = num.Add(num, big.NewInt(100))
 
-	// Combine: Adjective + Noun + Symbol + Number
-	password := strings.Join([]string{adj, noun, symbol, string(rune(number/100 + '0')), string(rune((number/10)%10 + '0')), string(rune(number%10 + '0'))}, "")
-
-	return password
+	return adj + noun + sym + num.String()
 }

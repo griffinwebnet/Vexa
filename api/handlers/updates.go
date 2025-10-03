@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/vexa/api/services"
 	"github.com/vexa/api/version"
 )
 
@@ -32,18 +33,24 @@ type GitHubRelease struct {
 
 // SystemVersion represents version information for a system component
 type SystemVersion struct {
-	Component string `json:"component"`
-	Version   string `json:"version"`
+	Component       string `json:"component"`        // Component name (api, web, samba, etc)
+	Version         string `json:"version"`          // Current version
+	UpdateStatus    string `json:"update_status"`    // Status of any pending updates
+	LastUpdated     string `json:"last_updated"`     // When component was last updated
+	Dependencies    bool   `json:"dependencies"`     // Whether component has all required dependencies
+	RequiresRestart bool   `json:"requires_restart"` // Whether update requires service restart
 }
 
 // UpdateStatus represents the current update status
 type UpdateStatus struct {
-	Versions        []SystemVersion `json:"versions"`         // Current versions of all components
-	LatestVersion   string          `json:"latest_version"`   // Latest version from GitHub
-	UpdateAvailable bool            `json:"update_available"` // Whether an update is available
-	Status          string          `json:"status"`           // Status message (Up to Date, Update Available, etc)
-	LatestRelease   *GitHubRelease  `json:"latest_release"`   // Details about the latest release
-	Error           string          `json:"error,omitempty"`  // Any error that occurred
+	Versions        []SystemVersion `json:"versions"`          // Current versions of all components
+	LatestVersion   string          `json:"latest_version"`    // Latest version from GitHub
+	UpdateAvailable bool            `json:"update_available"`  // Whether an update is available
+	Status          string          `json:"status"`            // Status message (Up to Date, Update Available, etc)
+	LatestRelease   *GitHubRelease  `json:"latest_release"`    // Details about the latest release
+	Error           string          `json:"error,omitempty"`   // Any error that occurred
+	Channel         string          `json:"channel"`           // Current update channel (stable/nightly)
+	BuildFromSource bool            `json:"build_from_source"` // Whether updates build from source
 }
 
 // CheckForUpdates checks for available updates from GitHub releases
@@ -52,13 +59,40 @@ func CheckForUpdates(c *gin.Context) {
 	componentVersions := version.Components()
 	fmt.Printf("Component versions: %+v\n", componentVersions)
 
-	// Convert to slice for response
-	var versions []SystemVersion
-	for component, ver := range componentVersions {
-		versions = append(versions, SystemVersion{
-			Component: component,
-			Version:   ver,
-		})
+	// Get status of all managed components
+	versions := []SystemVersion{
+		{
+			Component:       "api",
+			Version:         version.Current,
+			UpdateStatus:    "up_to_date",
+			LastUpdated:     time.Now().Format(time.RFC3339),
+			Dependencies:    true,
+			RequiresRestart: true,
+		},
+		{
+			Component:       "web",
+			Version:         version.Current,
+			UpdateStatus:    "up_to_date",
+			LastUpdated:     time.Now().Format(time.RFC3339),
+			Dependencies:    true,
+			RequiresRestart: true,
+		},
+		{
+			Component:       "samba",
+			Version:         services.GetSambaVersion(),
+			UpdateStatus:    services.CheckSambaUpdates(),
+			LastUpdated:     services.GetSambaLastUpdate(),
+			Dependencies:    services.CheckSambaDependencies(),
+			RequiresRestart: true,
+		},
+		{
+			Component:       "headscale",
+			Version:         services.GetHeadscaleVersion(),
+			UpdateStatus:    services.CheckHeadscaleUpdates(),
+			LastUpdated:     services.GetHeadscaleLastUpdate(),
+			Dependencies:    services.CheckHeadscaleDependencies(),
+			RequiresRestart: true,
+		},
 	}
 
 	// Get repository info
@@ -204,11 +238,68 @@ type UpgradeResponse struct {
 	Error   string `json:"error,omitempty"`
 }
 
+// UpgradeRequest represents the upgrade configuration
+type UpgradeRequest struct {
+	BuildFromSource bool `json:"build_from_source"` // whether to build from source
+}
+
+// UpgradeStatus represents the current upgrade status
+type UpgradeStatus struct {
+	Status    string `json:"status"`    // current status
+	Progress  int    `json:"progress"`  // progress percentage
+	Error     string `json:"error"`     // error message if any
+	Completed bool   `json:"completed"` // whether update is complete
+	Log       string `json:"log"`       // update log
+}
+
+// GetUpgradeStatus returns the current upgrade status
+func GetUpgradeStatus(c *gin.Context) {
+	progress, err := services.GetUpdateStatus()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Sprintf("Failed to get update status: %v", err),
+		})
+		return
+	}
+
+	// Get update log if available
+	log := ""
+	if progress.Status != "" {
+		if logText, err := services.GetUpdateLog(); err == nil {
+			log = logText
+		}
+	}
+
+	c.JSON(http.StatusOK, UpgradeStatus{
+		Status:    progress.Status,
+		Progress:  progress.Progress,
+		Error:     progress.Error,
+		Completed: progress.Completed,
+		Log:       log,
+	})
+}
+
 // PerformUpgrade executes the upgrade process
 func PerformUpgrade(c *gin.Context) {
-	// TODO: Implement actual upgrade logic
+	var req UpgradeRequest
+	if err := c.BindJSON(&req); err != nil {
+		// Default to not building from source if no request body
+		req = UpgradeRequest{
+			BuildFromSource: false,
+		}
+	}
+
+	// Start update via CLI
+	if err := services.UpdateSystem(req.BuildFromSource); err != nil {
+		c.JSON(http.StatusInternalServerError, UpgradeResponse{
+			Success: false,
+			Error:   err.Error(),
+		})
+		return
+	}
+
 	c.JSON(http.StatusOK, UpgradeResponse{
 		Success: true,
-		Message: "Upgrade completed successfully",
+		Message: "Update started. Check status for progress.",
 	})
 }

@@ -2,11 +2,8 @@
 set -e
 
 # Vexa Bootstrap Script
-# Installs all required dependencies for Samba AD DC replacement
-
 echo "======================================"
 echo "  Vexa Bootstrap Installer"
-echo "  Active Directory Replacement"
 echo "======================================"
 echo ""
 
@@ -23,126 +20,212 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Detect OS
+# Detect OS family
 detect_os() {
-    if [ -f /etc/os-release ]; then
-        . /etc/os-release
-        OS=$ID
-        VERSION=$VERSION_ID
-        echo -e "${GREEN}Detected OS: $PRETTY_NAME${NC}"
-    else
+    if [ ! -f /etc/os-release ]; then
         echo -e "${RED}Cannot detect OS. /etc/os-release not found.${NC}"
         exit 1
     fi
+    
+    . /etc/os-release
+    
+    case "$ID" in
+        # Debian family
+        ubuntu|debian|linuxmint|pop)
+            OS_FAMILY="debian"
+            ;;
+        
+        # RHEL family
+        rhel|centos|rocky|almalinux|fedora)
+            OS_FAMILY="rhel"
+            ;;
+        
+        # SUSE family
+        opensuse*|sles|suse)
+            OS_FAMILY="suse"
+            ;;
+        
+        *)
+            echo -e "${RED}Unsupported OS: $PRETTY_NAME${NC}"
+            echo "Supported distributions:"
+            echo "- Debian/Ubuntu and derivatives"
+            echo "- RHEL/Rocky/CentOS and derivatives"
+            echo "- SUSE Linux Enterprise/OpenSUSE"
+            exit 1
+            ;;
+    esac
+    
+    echo -e "${GREEN}Detected OS: $PRETTY_NAME${NC}"
 }
 
-# Install dependencies based on OS
-install_debian_ubuntu() {
-    echo -e "${YELLOW}Installing dependencies for Debian/Ubuntu...${NC}"
+# Install dependencies based on OS family
+install_deps() {
+    echo -e "${YELLOW}Installing dependencies...${NC}"
     
-    # Update package lists
-    apt-get update
-    
-    # Install Samba AD DC and dependencies
-    echo "Installing Samba AD DC..."
-    DEBIAN_FRONTEND=noninteractive apt-get install -y \
-        samba \
-        smbclient \
-        winbind \
-        libpam-winbind \
-        libnss-winbind \
-        krb5-user \
-        krb5-config \
-        libpam-krb5 \
-        bind9 \
-        bind9-dnsutils \
-        bind9-utils \
-        dnsutils \
-        ldb-tools \
-        attr \
-        acl \
-        python3-setproctitle \
-        python3-dnspython \
-        libpam-pwquality \
-        libpam-dev \
-        build-essential \
-        pkg-config
-    
-    echo -e "${GREEN}Debian/Ubuntu dependencies installed successfully${NC}"
+    case "$OS_FAMILY" in
+        debian)
+            # Update package lists
+            apt-get update
+            
+            # Install dependencies
+            DEBIAN_FRONTEND=noninteractive apt-get install -y \
+                samba \
+                samba-dc \
+                winbind \
+                krb5-user \
+                krb5-config \
+                ldb-tools \
+                attr \
+                acl \
+                build-essential \
+                pkg-config \
+                git \
+                curl \
+                nginx \
+                ddclient \
+                jq
+            ;;
+            
+        rhel)
+            # Enable EPEL
+            if command -v dnf &> /dev/null; then
+                dnf install -y epel-release
+                
+                # Install dependencies
+                dnf install -y \
+                    samba \
+                    samba-dc \
+                    samba-winbind \
+                    krb5-workstation \
+                    krb5-server \
+                    ldb-tools \
+                    attr \
+                    acl \
+                    gcc \
+                    make \
+                    pkg-config \
+                    git \
+                    curl \
+                    nginx \
+                    ddclient \
+                    jq
+            else
+                # Fallback for older RHEL systems using yum
+                yum install -y epel-release
+                
+                yum install -y \
+                    samba \
+                    samba-dc \
+                    samba-winbind \
+                    krb5-workstation \
+                    krb5-server \
+                    ldb-tools \
+                    attr \
+                    acl \
+                    gcc \
+                    make \
+                    pkg-config \
+                    git \
+                    curl \
+                    nginx
+            fi
+            ;;
+            
+        suse)
+            # Enable development tools repo
+            zypper addrepo -f https://download.opensuse.org/repositories/devel:/tools/15.4/devel:tools.repo
+            
+            # Install dependencies
+            zypper --non-interactive install \
+                samba \
+                samba-dc \
+                samba-winbind \
+                krb5 \
+                krb5-server \
+                ldb-tools \
+                attr \
+                acl \
+                gcc \
+                make \
+                pkg-config \
+                git \
+                curl \
+                nginx
+            ;;
+    esac
 }
 
-install_rhel_centos() {
-    echo -e "${YELLOW}Installing dependencies for RHEL/CentOS/Rocky...${NC}"
+# Install Go
+install_golang() {
+    echo -e "${YELLOW}Installing Go...${NC}"
     
-    # Install EPEL repository
-    dnf install -y epel-release || yum install -y epel-release
+    # Download and install Go 1.21
+    curl -fsSL https://golang.org/dl/go1.21.3.linux-amd64.tar.gz -o go.tar.gz
+    rm -rf /usr/local/go
+    tar -C /usr/local -xzf go.tar.gz
+    rm go.tar.gz
     
-    # Install Samba AD DC and dependencies
-    echo "Installing Samba AD DC..."
-    dnf install -y \
-        samba \
-        samba-dc \
-        samba-winbind \
-        samba-winbind-clients \
-        krb5-workstation \
-        krb5-server \
-        krb5-libs \
-        pam_krb5 \
-        bind \
-        bind-utils \
-        ldb-tools \
-        attr \
-        acl \
-        python3-dns \
-        pam-devel \
-        gcc \
-        make \
-        pkg-config \
-        || yum install -y \
-        samba \
-        samba-dc \
-        samba-winbind \
-        samba-winbind-clients \
-        krb5-workstation \
-        krb5-server \
-        krb5-libs \
-        pam_krb5 \
-        bind \
-        bind-utils \
-        ldb-tools \
-        attr \
-        acl \
-        python3-dns \
-        pam-devel \
-        gcc \
-        make \
-        pkg-config
+    # Add Go to PATH
+    echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/go.sh
+    source /etc/profile.d/go.sh
     
-    echo -e "${GREEN}RHEL/CentOS dependencies installed successfully${NC}"
+    echo -e "${GREEN}Go installed: $(go version)${NC}"
 }
 
-install_arch() {
-    echo -e "${YELLOW}Installing dependencies for Arch Linux...${NC}"
+# Install Node.js
+install_nodejs() {
+    echo -e "${YELLOW}Installing Node.js...${NC}"
     
-    pacman -Sy --noconfirm \
-        samba \
-        krb5 \
-        bind \
-        bind-tools \
-        pam \
-        acl \
-        attr \
-        python-dnspython \
-        base-devel \
-        pkg-config
+    case "$OS" in
+        ubuntu|debian)
+            curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+            apt-get install -y nodejs
+            ;;
+        centos|rhel|rocky)
+            curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
+            dnf install -y nodejs
+            ;;
+        arch)
+            pacman -S --noconfirm nodejs npm
+            ;;
+    esac
     
-    echo -e "${GREEN}Arch Linux dependencies installed successfully${NC}"
+    echo -e "${GREEN}Node.js: $(node --version)${NC}"
+    echo -e "${GREEN}npm: $(npm --version)${NC}"
 }
 
-# Stop conflicting services
-stop_conflicting_services() {
-    echo -e "${YELLOW}Stopping conflicting services...${NC}"
+# Install Dart SDK
+install_dart() {
+    echo -e "${YELLOW}Installing Dart SDK...${NC}"
     
+    case "$OS" in
+        ubuntu|debian)
+            curl -fsSL https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/dart.gpg
+            echo 'deb [signed-by=/usr/share/keyrings/dart.gpg arch=amd64] https://storage.googleapis.com/download.dartlang.org/linux/debian stable main' > /etc/apt/sources.list.d/dart_stable.list
+            apt-get update
+            apt-get install -y dart
+            ;;
+        centos|rhel|rocky)
+            # For RHEL/CentOS, we'll use the tarball
+            curl -fsSL https://storage.googleapis.com/dart-archive/channels/stable/release/latest/sdk/dartsdk-linux-x64-release.zip -o dart.zip
+            unzip dart.zip -d /usr/local
+            rm dart.zip
+            echo 'export PATH=$PATH:/usr/local/dart-sdk/bin' > /etc/profile.d/dart.sh
+            source /etc/profile.d/dart.sh
+            ;;
+        arch)
+            pacman -S --noconfirm dart
+            ;;
+    esac
+    
+    echo -e "${GREEN}Dart: $(dart --version)${NC}"
+}
+
+# Prepare system for Samba AD DC
+prepare_system() {
+    echo -e "${YELLOW}Preparing system for Samba AD DC...${NC}"
+    
+    # Stop and disable conflicting services
     services=(
         "smbd"
         "nmbd"
@@ -158,33 +241,174 @@ stop_conflicting_services() {
         fi
     done
     
-    echo -e "${GREEN}Conflicting services stopped${NC}"
+    # Clear existing Samba config
+    echo "Clearing existing Samba configuration..."
+    rm -f /etc/samba/smb.conf
+    
+    # Create base smb.conf to bind to all interfaces
+    cat > /etc/samba/smb.conf << 'EOF'
+[global]
+    # Listen on all interfaces
+    interfaces = 0.0.0.0/0
+    bind interfaces only = no
+EOF
+    
+    # Prepare Samba directories
+    echo "Setting up Samba directories..."
+    mkdir -p /var/lib/samba/sysvol
+    chmod 750 /var/lib/samba/sysvol
+    
+    # Handle DNS configuration
+    echo "Configuring DNS..."
+    if [ -L /etc/resolv.conf ]; then
+        rm -f /etc/resolv.conf
+        touch /etc/resolv.conf
+    fi
+    
+    # Create required Samba user/group
+    echo "Setting up Samba system accounts..."
+    if ! getent group samba >/dev/null; then
+        groupadd -r samba
+    fi
+    if ! getent passwd samba >/dev/null; then
+        useradd -r -g samba -d /var/lib/samba -s /sbin/nologin samba
+    fi
+    
+    echo -e "${GREEN}System prepared for Samba AD DC${NC}"
 }
 
-# Create Vexa directories
-create_directories() {
-    echo -e "${YELLOW}Creating Vexa directory structure...${NC}"
+# Setup Vexa
+setup_vexa() {
+    echo -e "${YELLOW}Setting up Vexa...${NC}"
     
-    SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-    
-    mkdir -p "$SCRIPT_DIR/api"
-    mkdir -p "$SCRIPT_DIR/web"
-    mkdir -p "$SCRIPT_DIR/data"
-    mkdir -p "$SCRIPT_DIR/logs"
-    mkdir -p "/etc/vexa"
-    mkdir -p "/var/lib/vexa"
-    mkdir -p "/var/log/vexa"
+    # Create directories
+    mkdir -p /opt/vexa
+    mkdir -p /var/log/vexa
+    mkdir -p /var/www/vexa
+    mkdir -p /etc/vexa
+    mkdir -p /var/lib/vexa
     
     # Set permissions
-    chmod 755 "$SCRIPT_DIR/api"
-    chmod 755 "$SCRIPT_DIR/web"
-    chmod 750 "$SCRIPT_DIR/data"
-    chmod 755 "$SCRIPT_DIR/logs"
-    chmod 750 "/etc/vexa"
-    chmod 750 "/var/lib/vexa"
-    chmod 755 "/var/log/vexa"
+    chmod 750 /etc/vexa
+    chmod 750 /var/lib/vexa
+    chmod 755 /var/log/vexa
+    chmod 755 /var/www/vexa
     
-    echo -e "${GREEN}Directory structure created${NC}"
+    cd /opt/vexa
+    
+    # Get latest release version
+    echo -e "${YELLOW}Fetching latest release...${NC}"
+    local latest_version
+    latest_version=$(curl -s https://api.github.com/repos/griffinwebnet/Vexa/releases/latest | grep -Po '"tag_name": "\K[^"]*')
+    
+    if [ -z "$latest_version" ]; then
+        echo -e "${RED}Failed to get latest version${NC}"
+        exit 1
+    fi
+    
+    echo "Latest release: $latest_version"
+    
+    # Clone just that release
+    git clone --depth 1 --branch "$latest_version" https://github.com/griffinwebnet/Vexa.git source
+    cd source
+    
+    # Build from release source
+    build_components
+}
+
+# Build all components
+build_components() {
+    # Build Dart CLI
+    echo "Building Vexa CLI..."
+    cd vexa-cli/vexa
+    dart pub get
+    dart compile exe bin/vexa.dart -o /usr/local/bin/vexa
+    chmod +x /usr/local/bin/vexa
+    
+    # Build Go API
+    echo "Building API server..."
+    cd ../../api
+    go build -o /usr/local/bin/vexa-api
+    chmod +x /usr/local/bin/vexa-api
+    
+    # Build React frontend
+    echo "Building web interface..."
+    cd ../web
+    npm ci
+    npm run build
+    
+    # Install web files
+    rm -rf /var/www/vexa/*
+    mv dist/* /var/www/vexa/
+    
+    echo -e "${GREEN}Vexa components built successfully${NC}"
+}
+
+# Configure nginx
+setup_nginx() {
+    echo -e "${YELLOW}Configuring nginx...${NC}"
+    
+    # Create nginx config
+    cat > /etc/nginx/conf.d/vexa.conf << 'EOF'
+server {
+    listen 80;
+    server_name _;
+    
+    root /var/www/vexa;
+    index index.html;
+    
+    # API proxy
+    location /api/ {
+        proxy_pass http://localhost:8080/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+    
+    # Static files
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+EOF
+    
+    # Test and reload nginx
+    nginx -t
+    systemctl reload nginx
+    
+    echo -e "${GREEN}Nginx configured successfully${NC}"
+}
+
+# Create systemd services
+setup_services() {
+    echo -e "${YELLOW}Creating systemd services...${NC}"
+    
+    # API service
+    cat > /etc/systemd/system/vexa-api.service << 'EOF'
+[Unit]
+Description=Vexa API Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/vexa-api
+Restart=always
+RestartSec=5
+Environment=ENV=production
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    
+    # Enable and start services
+    systemctl daemon-reload
+    systemctl enable nginx vexa-api
+    systemctl restart nginx vexa-api
+    
+    echo -e "${GREEN}Services configured and started${NC}"
 }
 
 # Verify installations
@@ -194,12 +418,14 @@ verify_installations() {
     commands=(
         "samba"
         "samba-tool"
-        "smbclient"
         "kinit"
-        "klist"
-        "named"
-        "dig"
         "go"
+        "node"
+        "npm"
+        "dart"
+        "nginx"
+        "vexa"
+        "vexa-api"
     )
     
     all_ok=true
@@ -214,86 +440,66 @@ verify_installations() {
     
     if [ "$all_ok" = true ]; then
         echo -e "${GREEN}All required commands are available${NC}"
-        return 0
     else
-        echo -e "${YELLOW}Some commands are missing but this may be OK${NC}"
-        return 0
-    fi
-}
-
-# Check Node.js/npm for frontend
-check_nodejs() {
-    echo -e "${YELLOW}Checking Node.js installation...${NC}"
-    
-    if ! command -v node &> /dev/null; then
-        echo -e "${YELLOW}Node.js not found. Installing...${NC}"
-        
-        case "$OS" in
-            ubuntu|debian)
-                curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-                apt-get install -y nodejs
-                ;;
-            centos|rhel|rocky)
-                curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
-                dnf install -y nodejs || yum install -y nodejs
-                ;;
-            arch)
-                pacman -S --noconfirm nodejs npm
-                ;;
-        esac
-    fi
-    
-    if command -v node &> /dev/null; then
-        NODE_VERSION=$(node --version)
-        NPM_VERSION=$(npm --version)
-        echo -e "${GREEN}Node.js: $NODE_VERSION${NC}"
-        echo -e "${GREEN}npm: $NPM_VERSION${NC}"
-    else
-        echo -e "${RED}Failed to install Node.js${NC}"
-        exit 1
+        echo -e "${YELLOW}Some commands are missing - check output above${NC}"
     fi
 }
 
 # Main installation flow
 main() {
     detect_os
-    
-    case "$OS" in
-        ubuntu|debian)
-            install_debian_ubuntu
-            ;;
-        centos|rhel|rocky)
-            install_rhel_centos
-            ;;
-        arch)
-            install_arch
-            ;;
-        *)
-            echo -e "${RED}Unsupported OS: $OS${NC}"
-            echo "Supported: Ubuntu, Debian, CentOS, RHEL, Rocky Linux, Arch Linux"
-            exit 1
-            ;;
-    esac
-    
-    stop_conflicting_services
-    create_directories
-    check_nodejs
+    install_deps
+    install_golang
+    install_nodejs
+    install_dart
+    prepare_system
+    setup_vexa
+    setup_nginx
+    setup_services
     verify_installations
     
     echo ""
     echo -e "${GREEN}======================================"
-    echo "  Vexa Bootstrap Complete!"
+    echo "  Vexa Installation Complete!"
     echo "======================================${NC}"
     echo ""
-    echo "Next steps:"
-    echo "1. Configure Samba AD DC: cd api && go run ."
-    echo "2. Build frontend: cd web && npm install && npm run dev"
-    echo "3. Access the web interface on http://localhost:5173"
+    echo "You can now access Vexa at: http://$(hostname -I | awk '{print $1}')"
     echo ""
-    echo -e "${YELLOW}Note: You may need to configure your firewall to allow:"
+    echo "Next steps:"
+    echo "1. Open the web interface"
+    echo "2. Complete the domain setup wizard"
+    echo "3. Start managing your domain"
+    echo ""
+    echo -e "${YELLOW}Note: Make sure ports are open in your firewall:"
+    echo "  - HTTP (80/tcp) - Web interface"
     echo "  - DNS (53/tcp, 53/udp)"
     echo "  - Kerberos (88/tcp, 88/udp)"
-    echo "  - LDAP (389/tcp, 389/udp)"
+    echo "  - LDAP (389/tcp)"
+    echo "  - SMB (445/tcp)"
+    echo "  - Kerberos Password (464/tcp, 464/udp)"
+    echo "  - LDAPS (636/tcp)"
+    echo "  - Global Catalog (3268/tcp, 3269/tcp)"
+    echo -e "${NC}"
+    
+    echo ""
+    echo -e "${GREEN}======================================"
+    echo "  Vexa Installation Complete!"
+    echo "======================================${NC}"
+    echo ""
+    echo "Services installed:"
+    echo "1. vexa-api - API server (port 8080)"
+    echo "2. nginx - Web interface (port 80)"
+    echo "3. samba-ad-dc - Active Directory"
+    echo "4. bind9 - DNS Server"
+    echo ""
+    echo "You can now access Vexa at: http://$(hostname -I | awk '{print $1}')"
+    echo ""
+    echo -e "${YELLOW}Note: Make sure to configure your firewall to allow:"
+    echo "  - HTTP (80/tcp) - Web interface"
+    echo "  - API (8080/tcp) - API server"
+    echo "  - DNS (53/tcp, 53/udp)"
+    echo "  - Kerberos (88/tcp, 88/udp)"
+    echo "  - LDAP (389/tcp)"
     echo "  - SMB (445/tcp)"
     echo "  - Kerberos Password (464/tcp, 464/udp)"
     echo "  - LDAPS (636/tcp)"
@@ -303,4 +509,3 @@ main() {
 
 # Run main function
 main
-
