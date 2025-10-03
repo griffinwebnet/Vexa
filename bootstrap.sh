@@ -3,7 +3,7 @@ set -e
 
 # Vexa Bootstrap Script
 echo "======================================"
-echo "  Vexa Bootstrap Installer  v0.1.21"
+echo "  Vexa Bootstrap Installer  v0.1.22"
 echo "======================================"
 echo ""
 
@@ -30,6 +30,11 @@ fi
 
 echo -e "${GREEN}Installing system packages...${NC}"
             apt-get update
+
+# Install Node.js 20 from NodeSource repository
+echo -e "${YELLOW}Installing Node.js 20...${NC}"
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs
             
 # Install non-Samba packages first
             DEBIAN_FRONTEND=noninteractive apt-get install -y \
@@ -48,9 +53,7 @@ echo -e "${GREEN}Installing system packages...${NC}"
     jq \
     pamtester \
     vim-nox \
-    golang-go \
-    nodejs \
-    npm
+    golang-go
 
 # Install Samba
 echo -e "${YELLOW}Installing Samba...${NC}"
@@ -140,7 +143,7 @@ echo -e "${GREEN}API built${NC}"
     # Build React frontend
 echo -e "${YELLOW}Building web interface...${NC}"
 cd /var/www/vexa/web
-    npm ci
+    npm install
     npm run build
 echo -e "${GREEN}Frontend built${NC}"
 
