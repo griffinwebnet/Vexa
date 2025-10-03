@@ -3,7 +3,7 @@ set -e
 
 # Vexa Update Script
 echo "======================================"
-echo "  Vexa Update Script  v0.1.18"
+echo "  Vexa Update Script  v0.1.19"
 echo "======================================"
 echo ""
 
@@ -26,6 +26,47 @@ if [ "$EUID" -ne 0 ]; then
     echo -e "${RED}ERROR: This script must be run as root${NC}"
     echo "Please run: sudo $0"
     exit 1
+fi
+
+# Ensure Samba is held at 4.15 (don't let it upgrade to buggy 4.19.5)
+echo -e "${YELLOW}Checking Samba version...${NC}"
+CURRENT_SAMBA=$(dpkg -l | grep "^ii  samba " | awk '{print $3}' | cut -d'+' -f1)
+
+if [[ "$CURRENT_SAMBA" == "4.15"* ]]; then
+    echo -e "${GREEN}Samba 4.15 installed - good!${NC}"
+    # Ensure packages are held
+    apt-mark hold samba samba-dsdb-modules samba-common samba-common-bin samba-libs winbind libwbclient0 2>/dev/null || true
+elif [[ "$CURRENT_SAMBA" == "4.19"* ]]; then
+    echo -e "${RED}WARNING: Samba 4.19 detected - this version has LXC bugs!${NC}"
+    echo -e "${YELLOW}Downgrading to Samba 4.15...${NC}"
+    
+    cd /tmp
+    SAMBA_VERSION="4.15.13+dfsg-0ubuntu1.6"
+    
+    # Download Samba 4.15 packages
+    wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/samba_${SAMBA_VERSION}_amd64.deb
+    wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/samba-common_${SAMBA_VERSION}_all.deb
+    wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/samba-common-bin_${SAMBA_VERSION}_amd64.deb
+    wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/samba-dsdb-modules_${SAMBA_VERSION}_amd64.deb
+    wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/samba-libs_${SAMBA_VERSION}_amd64.deb
+    wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/winbind_${SAMBA_VERSION}_amd64.deb
+    wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/libwbclient0_${SAMBA_VERSION}_amd64.deb
+    
+    # Stop Samba services before downgrade
+    systemctl stop samba-ad-dc 2>/dev/null || true
+    systemctl stop smbd nmbd winbind 2>/dev/null || true
+    
+    # Install downgraded packages
+    DEBIAN_FRONTEND=noninteractive dpkg -i *.deb 2>/dev/null || true
+    DEBIAN_FRONTEND=noninteractive apt-get install -f -y
+    
+    # Hold packages
+    apt-mark hold samba samba-dsdb-modules samba-common samba-common-bin samba-libs winbind libwbclient0
+    
+    rm -f *.deb
+    echo -e "${GREEN}Samba downgraded to 4.15${NC}"
+else
+    echo -e "${YELLOW}Unknown Samba version: $CURRENT_SAMBA${NC}"
 fi
 
 # Fetch Vexa source

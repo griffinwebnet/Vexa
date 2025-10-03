@@ -3,7 +3,7 @@ set -e
 
 # Vexa Bootstrap Script
 echo "======================================"
-echo "  Vexa Bootstrap Installer  v0.1.18"
+echo "  Vexa Bootstrap Installer  v0.1.19"
 echo "======================================"
 echo ""
 
@@ -30,10 +30,9 @@ fi
 
 echo -e "${GREEN}Installing system packages...${NC}"
 apt-get update
+
+# Install non-Samba packages first
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    samba \
-    samba-dsdb-modules \
-    winbind \
     krb5-user \
     krb5-config \
     ldb-tools \
@@ -53,7 +52,33 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
     nodejs \
     npm
 
-echo -e "${GREEN}Packages installed${NC}"
+# Downgrade Samba to 4.15 from Ubuntu 22.04
+# Samba 4.19.5 in Ubuntu 24.04 has a security context bug in unprivileged LXC containers
+echo -e "${YELLOW}Installing Samba 4.15 from Ubuntu 22.04 (fixes LXC provisioning bug)...${NC}"
+
+cd /tmp
+SAMBA_VERSION="4.15.13+dfsg-0ubuntu1.6"
+
+# Download Samba 4.15 packages from Jammy
+wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/samba_${SAMBA_VERSION}_amd64.deb
+wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/samba-common_${SAMBA_VERSION}_all.deb
+wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/samba-common-bin_${SAMBA_VERSION}_amd64.deb
+wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/samba-dsdb-modules_${SAMBA_VERSION}_amd64.deb
+wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/samba-libs_${SAMBA_VERSION}_amd64.deb
+wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/winbind_${SAMBA_VERSION}_amd64.deb
+wget -q http://archive.ubuntu.com/ubuntu/pool/main/s/samba/libwbclient0_${SAMBA_VERSION}_amd64.deb
+
+# Install the downgraded packages
+DEBIAN_FRONTEND=noninteractive dpkg -i *.deb 2>/dev/null || true
+DEBIAN_FRONTEND=noninteractive apt-get install -f -y
+
+# Hold Samba packages to prevent upgrade
+apt-mark hold samba samba-dsdb-modules samba-common samba-common-bin samba-libs winbind libwbclient0
+
+# Cleanup
+rm -f *.deb
+
+echo -e "${GREEN}Packages installed (Samba $(samba --version | cut -d' ' -f2))${NC}"
 
 # Fetch Vexa source
 cd /tmp
