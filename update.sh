@@ -3,7 +3,7 @@ set -e
 
 # Vexa Update Script
 echo "======================================"
-echo "  Vexa Update Script  v0.1.44"
+echo "  Vexa Update Script  v0.1.45"
 echo "======================================"
 echo ""
 
@@ -40,6 +40,16 @@ if [ -f /proc/1/status ] && grep -q "CapEff.*0000000000000000" /proc/1/status 2>
         echo ""
     fi
 fi
+
+# Ensure required packages are installed
+echo -e "${YELLOW}Ensuring required packages...${NC}"
+apt-get update
+DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    samba-common-bin \
+    smbclient \
+    pamtester \
+    libpam-modules
+echo -e "${GREEN}Required packages installed${NC}"
 
 # Fetch Vexa source
 cd /tmp

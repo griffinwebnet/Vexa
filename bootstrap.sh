@@ -3,7 +3,7 @@ set -e
 
 # Vexa Bootstrap Script
 echo "======================================"
-echo "  Vexa Bootstrap Installer  v0.1.44"
+echo "  Vexa Bootstrap Installer  v0.1.45"
 echo "======================================"
 echo ""
 
@@ -60,6 +60,8 @@ echo -e "${YELLOW}Installing Samba...${NC}"
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
                     samba \
     samba-dsdb-modules \
+    samba-common-bin \
+    smbclient \
     winbind
 
 echo -e "${GREEN}Samba installed${NC}"
