@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import api from '../lib/api'
 
 // Get version from package.json
-const VERSION = '0.1.42'
+const VERSION = '0.1.43'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -22,19 +22,31 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
 
+    console.log('=== LOGIN ATTEMPT ===')
+    console.log('Username:', username)
+    console.log('Attempting login...')
+
     try {
       const response = await api.post('/auth/login', {
         username,
         password,
       })
 
+      console.log('Login successful:', response.data)
       const { token, username: user, is_admin } = response.data
       login(token, user, is_admin)
       navigate('/')
     } catch (err: any) {
+      console.error('=== LOGIN FAILED ===')
+      console.error('Full error:', err)
+      console.error('Response status:', err.response?.status)
+      console.error('Response data:', err.response?.data)
+      console.error('Error message:', err.response?.data?.error)
+      
       setError(err.response?.data?.error || 'Login failed. Please try again.')
     } finally {
       setLoading(false)
+      console.log('=== LOGIN ATTEMPT END ===')
     }
   }
 
