@@ -13,7 +13,7 @@ import (
 // Global dev mode flag
 var DevMode bool
 
-const Version = "0.1.50"
+const Version = "0.1.52"
 
 func main() {
 	// Parse command line flags
@@ -64,6 +64,7 @@ func main() {
 	// Protected routes (require authentication)
 	protected := router.Group("/api/v1")
 	protected.Use(middleware.AuthRequired())
+	protected.Use(middleware.ProvisioningGate())
 	{
 		// Domain management
 		protected.POST("/domain/provision", domainHandler.ProvisionDomain)

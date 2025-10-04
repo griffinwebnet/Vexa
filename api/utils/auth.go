@@ -315,3 +315,53 @@ func trySmbclientAuth(username, password, domainName string, ctx context.Context
 
 	return false
 }
+
+// CheckLocalAdminStatus determines if a local (PAM) user is an administrator
+// by checking common sudo-capable groups and root. This is used to allow
+// bootstrap by local admins on unprovisioned systems.
+func CheckLocalAdminStatus(username string) bool {
+	if username == "root" {
+		return true
+	}
+
+	// Get user's groups: id -nG <user>
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "id", "-nG", username)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		groupsLine := strings.TrimSpace(string(output))
+		if groupsLine != "" {
+			groups := strings.Fields(groupsLine)
+			for _, g := range groups {
+				switch g {
+				case "sudo", "wheel", "admin":
+					return true
+				}
+			}
+		}
+	}
+
+	// Fallback: check getent for standard admin groups membership
+	adminGroups := []string{"sudo", "wheel", "admin"}
+	for _, grp := range adminGroups {
+		ctx2, cancel2 := context.WithTimeout(context.Background(), 2*time.Second)
+		cmd2 := exec.CommandContext(ctx2, "getent", "group", grp)
+		out2, err2 := cmd2.CombinedOutput()
+		cancel2()
+		if err2 == nil {
+			// format: group_name:*:GID:user1,user2
+			parts := strings.Split(strings.TrimSpace(string(out2)), ":")
+			if len(parts) >= 4 {
+				members := strings.Split(parts[3], ",")
+				for _, m := range members {
+					if strings.TrimSpace(m) == username {
+						return true
+					}
+				}
+			}
+		}
+	}
+
+	return false
+}

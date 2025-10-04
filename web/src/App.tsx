@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import { useAuthStore } from './stores/authStore'
 import { ThemeProvider } from './components/ThemeProvider'
 import LoginPage from './pages/LoginPage'
@@ -17,23 +18,54 @@ import SelfService from './pages/SelfService'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
-  const setupComplete = localStorage.getItem('vexa-setup-complete')
-  
+  const isAdmin = useAuthStore((state) => state.isAdmin)
+  const token = useAuthStore((state) => state.token)
+  const [provisioned, setProvisioned] = useState<boolean | null>(null)
+  const setupCompleteLocal = localStorage.getItem('vexa-setup-complete') === 'true'
+
+  useEffect(() => {
+    let cancelled = false
+    async function fetchStatus() {
+      try {
+        const resp = await fetch('/api/v1/domain/status', {
+          headers: {
+            'Authorization': token ? `Bearer ${token}` : ''
+          }
+        })
+        if (!resp.ok) throw new Error('status failed')
+        const data = await resp.json()
+        if (!cancelled) setProvisioned(!!data.provisioned)
+      } catch {
+        if (!cancelled) setProvisioned(null)
+      }
+    }
+    if (isAuthenticated) {
+      fetchStatus()
+    }
+    return () => { cancelled = true }
+  }, [isAuthenticated, token])
+
   if (!isAuthenticated) {
     return <Navigate to="/login" />
   }
-  
-  // Simplified routing logic to avoid React error #300
-  // Use localStorage as primary check, API check only when needed
-  if (!setupComplete && window.location.pathname !== '/wizard') {
-    return <Navigate to="/wizard" />
+
+  const effectiveProvisioned = provisioned !== null ? provisioned : setupCompleteLocal
+
+  // If system is NOT provisioned: only admins may proceed to the wizard
+  if (!effectiveProvisioned) {
+    if (!isAdmin) {
+      return <Navigate to="/login" />
+    }
+    if (window.location.pathname !== '/wizard') {
+      return <Navigate to="/wizard" />
+    }
   }
-  
-  // If setup is complete, prevent access to wizard
-  if (setupComplete && window.location.pathname === '/wizard') {
+
+  // If provisioned: block access to wizard
+  if (effectiveProvisioned && window.location.pathname === '/wizard') {
     return <Navigate to="/" />
   }
-  
+
   return <>{children}</>
 }
 

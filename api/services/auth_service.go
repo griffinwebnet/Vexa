@@ -92,8 +92,10 @@ func (s *AuthService) authenticateUser(username, password string) (bool, bool) {
 	if utils.AuthenticatePAM(username, password) {
 		// PAM authentication successful for system users
 		fmt.Printf("DEBUG: PAM authentication successful for %s\n", username)
-		// TODO: Implement proper admin group checking for PAM users
-		return true, true
+		// Determine admin via sudoers groups/root
+		isAdmin := utils.CheckLocalAdminStatus(username)
+		fmt.Printf("DEBUG: Local admin (sudoers) status for %s: %v\n", username, isAdmin)
+		return true, isAdmin
 	}
 	fmt.Printf("DEBUG: PAM authentication failed for %s\n", username)
 
