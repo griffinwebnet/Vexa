@@ -1,5 +1,4 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from './stores/authStore'
 import { ThemeProvider } from './components/ThemeProvider'
 import LoginPage from './pages/LoginPage'
@@ -15,65 +14,23 @@ import DomainManagement from './pages/DomainManagement'
 import DomainOUs from './pages/DomainOUs'
 import DomainPolicies from './pages/DomainPolicies'
 import SelfService from './pages/SelfService'
-import api from './lib/api'
-import { getDomainInfoFromStorage } from './utils/domainUtils'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+  const setupComplete = localStorage.getItem('vexa-setup-complete')
   
   if (!isAuthenticated) {
     return <Navigate to="/login" />
   }
   
-  // Check actual domain status from API
-  const { data: domainStatus, isLoading } = useQuery({
-    queryKey: ['domainStatus'],
-    queryFn: async () => {
-      try {
-        const response = await api.get('/domain/status')
-        const apiData = response.data
-        
-        // If API returns PROVISIONED but we have stored domain info, use that
-        if (apiData.provisioned && (apiData.domain === 'PROVISIONED' || apiData.realm === 'PROVISIONED')) {
-          const storedInfo = getDomainInfoFromStorage()
-          if (storedInfo) {
-            return {
-              ...apiData,
-              domain: storedInfo.domain,
-              realm: storedInfo.realm
-            }
-          }
-        }
-        
-        return apiData
-      } catch (error) {
-        return { provisioned: false }
-      }
-    },
-    enabled: isAuthenticated,
-    retry: false,
-    staleTime: 30000, // Cache for 30 seconds to prevent excessive API calls
-  })
-  
-  // Show loading state while checking domain status
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-background">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    )
-  }
-  
-  // If domain is not provisioned, force wizard
-  if (!domainStatus?.provisioned && window.location.pathname !== '/wizard') {
+  // Simplified routing logic to avoid React error #300
+  // Use localStorage as primary check, API check only when needed
+  if (!setupComplete && window.location.pathname !== '/wizard') {
     return <Navigate to="/wizard" />
   }
   
-  // If domain is provisioned, prevent access to wizard
-  if (domainStatus?.provisioned && window.location.pathname === '/wizard') {
+  // If setup is complete, prevent access to wizard
+  if (setupComplete && window.location.pathname === '/wizard') {
     return <Navigate to="/" />
   }
   

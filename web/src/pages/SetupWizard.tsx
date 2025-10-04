@@ -155,7 +155,10 @@ export default function SetupWizard() {
                     content === 'Creating default groups...' ||
                     content === 'Starting Samba AD DC service...' ||
                     content === 'Samba AD DC service started successfully' ||
-                    content === 'Domain provisioning completed!'
+                    content === 'Domain provisioning completed!' ||
+                    // Also check for completion messages with different patterns
+                    content.includes('Domain provisioning completed') ||
+                    content.includes('Samba AD DC service started successfully')
                   ) {
                     console.log('Updating status to:', content)
                     if (isMounted.current) {
@@ -163,8 +166,10 @@ export default function SetupWizard() {
                     }
                     
                     // Force success if we see completion message
-                    if (content === 'Domain provisioning completed!') {
-                      console.log('FORCING SUCCESS STATE due to completion message')
+                    if (content === 'Domain provisioning completed!' || 
+                        content.includes('Domain provisioning completed') ||
+                        content === 'Samba AD DC service started successfully') {
+                      console.log('FORCING SUCCESS STATE due to completion message:', content)
                       if (isMounted.current) {
                         setProvisioningState('success')
                       }
