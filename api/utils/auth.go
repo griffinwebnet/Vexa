@@ -158,6 +158,46 @@ func CheckDomainAdminStatus(username string) bool {
 	return false
 }
 
+// VerifyCurrentPassword verifies a user's current password directly against Samba
+func VerifyCurrentPassword(username, password string) bool {
+	fmt.Printf("DEBUG: Verifying current password for user: %s\n", username)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Get domain name
+	domainName := getDomainName()
+	if domainName == "" {
+		fmt.Printf("DEBUG: No domain name detected for password verification\n")
+		return false
+	}
+
+	// Try with domain prefix first
+	fmt.Printf("DEBUG: Trying password verification with domain prefix %s\\%s\n", domainName, username)
+	cmd := exec.CommandContext(ctx, "smbclient", "//localhost/ipc$", "-U", domainName+"\\"+username+"%"+password, "-c", "exit")
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		fmt.Printf("DEBUG: Password verification successful for %s\\%s\n", domainName, username)
+		return true
+	} else {
+		fmt.Printf("DEBUG: Password verification failed for %s\\%s: %v, output: %s\n", domainName, username, err, string(output))
+	}
+
+	// Try without domain prefix
+	fmt.Printf("DEBUG: Trying password verification without domain prefix for %s\n", username)
+	cmd2 := exec.CommandContext(ctx, "smbclient", "//localhost/ipc$", "-U", username+"%"+password, "-c", "exit")
+	output2, err2 := cmd2.CombinedOutput()
+	if err2 == nil {
+		fmt.Printf("DEBUG: Password verification successful for %s\n", username)
+		return true
+	} else {
+		fmt.Printf("DEBUG: Password verification failed for %s: %v, output: %s\n", username, err2, string(output2))
+	}
+
+	fmt.Printf("DEBUG: Password verification failed for user %s\n", username)
+	return false
+}
+
 // tryKerberosAuth attempts Kerberos authentication
 func tryKerberosAuth(username, password, domainName string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

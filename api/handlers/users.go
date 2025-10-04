@@ -8,6 +8,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/vexa/api/models"
 	"github.com/vexa/api/services"
+	"github.com/vexa/api/utils"
 )
 
 // UserHandler handles HTTP requests for user operations
@@ -189,20 +190,15 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 
-	// Verify current password first
-	authService := services.NewAuthService(false)
-	authResult, err := authService.Authenticate(models.LoginRequest{
-		Username: username,
-		Password: req.CurrentPassword,
-	})
-
-	if err != nil || !authResult.Authenticated {
+	// Verify current password directly against Samba (not through auth service)
+	// This avoids auth service logout issues during password verification
+	if !utils.VerifyCurrentPassword(username, req.CurrentPassword) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current password is incorrect"})
 		return
 	}
 
 	// Change password
-	err = h.userService.ChangeUserPassword(username, req.NewPassword)
+	err := h.userService.ChangeUserPassword(username, req.NewPassword)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
