@@ -15,6 +15,8 @@ func ProvisioningGate() gin.HandlerFunc {
 		// Allow auth and domain provisioning endpoints to pass through
 		path := c.FullPath()
 		if path == "/api/v1/auth/login" ||
+			path == "/api/v1/auth/bootstrap-status" ||
+			path == "/api/v1/auth/bootstrap-admin" ||
 			path == "/api/v1/domain/provision" ||
 			path == "/api/v1/domain/provision-with-output" ||
 			path == "/api/v1/domain/status" ||

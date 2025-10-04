@@ -18,7 +18,6 @@ import SelfService from './pages/SelfService'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
-  const isAdmin = useAuthStore((state) => state.isAdmin)
   const token = useAuthStore((state) => state.token)
   const [provisioned, setProvisioned] = useState<boolean | null>(null)
 
@@ -51,11 +50,8 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   // Be strict: if unknown, treat as unprovisioned to avoid exposing UI
   const effectiveProvisioned = provisioned === true
 
-  // If system is NOT provisioned: only admins may proceed to the wizard
+  // If system is NOT provisioned: redirect any authenticated user to wizard
   if (!effectiveProvisioned) {
-    if (!isAdmin) {
-      return <Navigate to="/login" />
-    }
     if (window.location.pathname !== '/wizard') {
       return <Navigate to="/wizard" />
     }

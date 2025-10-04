@@ -13,7 +13,7 @@ import (
 // Global dev mode flag
 var DevMode bool
 
-const Version = "0.1.53"
+const Version = "0.1.54"
 
 func main() {
 	// Parse command line flags
@@ -51,6 +51,8 @@ func main() {
 	public := router.Group("/api/v1")
 	{
 		public.POST("/auth/login", authHandler.Login)
+		public.GET("/auth/bootstrap-status", authHandler.BootstrapStatus)
+		public.POST("/auth/bootstrap-admin", authHandler.BootstrapAdmin)
 		public.GET("/version", func(c *gin.Context) {
 			c.JSON(200, gin.H{
 				"version": Version,
