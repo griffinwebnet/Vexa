@@ -3,7 +3,7 @@ set -e
 
 # Vexa Bootstrap Script
 echo "======================================"
-echo "  Vexa Bootstrap Installer  v0.1.45"
+echo "  Vexa Bootstrap Installer  v0.1.47"
 echo "======================================"
 echo ""
 
@@ -112,21 +112,22 @@ if [ "$NIGHTLY" = true ]; then
 else
     echo -e "${YELLOW}Fetching latest release...${NC}"
     
-    # Check if releases exist first
-    RELEASE_COUNT=$(curl -s https://api.github.com/repos/griffinwebnet/Vexa/releases | jq length)
+    LATEST_RELEASE=$(curl -s https://api.github.com/repos/griffinwebnet/Vexa/releases/latest | jq -r '.tag_name' 2>/dev/null)
     
-    if [ -z "$RELEASE_COUNT" ] || [ "$RELEASE_COUNT" = "0" ] || [ "$RELEASE_COUNT" = "null" ]; then
-        echo -e "${YELLOW}No releases found, falling back to main branch...${NC}"
+    echo "DEBUG: Latest release response: $LATEST_RELEASE"
+    
+    if [ -n "$LATEST_RELEASE" ] && [ "$LATEST_RELEASE" != "null" ] && [ "$LATEST_RELEASE" != "" ]; then
+        echo "Latest release found: $LATEST_RELEASE"
+        git clone --branch "$LATEST_RELEASE" --depth 1 https://github.com/griffinwebnet/Vexa.git
+        cd Vexa
+        CURRENT_VERSION="$LATEST_RELEASE"
+    else
+        echo -e "${YELLOW}Could not fetch latest release, using main branch...${NC}"
         git clone https://github.com/griffinwebnet/Vexa.git
         cd Vexa
         git checkout master 2>/dev/null || git checkout main 2>/dev/null || true
         CURRENT_VERSION="main-$(git rev-parse --short HEAD)"
-    else
-        LATEST_RELEASE=$(curl -s https://api.github.com/repos/griffinwebnet/Vexa/releases/latest | jq -r '.tag_name')
-        echo "Latest release: $LATEST_RELEASE"
-        git clone --branch "$LATEST_RELEASE" --depth 1 https://github.com/griffinwebnet/Vexa.git
-        cd Vexa
-        CURRENT_VERSION="$LATEST_RELEASE"
+        echo "Using development version: $CURRENT_VERSION"
     fi
 fi
 

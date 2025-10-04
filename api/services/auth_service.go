@@ -80,8 +80,11 @@ func (s *AuthService) authenticateUser(username, password string) (bool, bool) {
 	if utils.AuthenticateSAMBA(username, password) {
 		// SAMBA authentication successful
 		fmt.Printf("DEBUG: SAMBA authentication successful for %s\n", username)
-		// TODO: Check if user is in Domain Admins group for admin status
-		return true, true
+
+		// Check if user is in Domain Admins group for admin status
+		isAdmin := utils.CheckDomainAdminStatus(username)
+		fmt.Printf("DEBUG: User %s admin status: %v\n", username, isAdmin)
+		return true, isAdmin
 	}
 	fmt.Printf("DEBUG: SAMBA authentication failed for %s\n", username)
 

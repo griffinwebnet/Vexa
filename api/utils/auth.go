@@ -112,6 +112,52 @@ func getDomainName() string {
 	return ""
 }
 
+// CheckDomainAdminStatus checks if a user is in the Domain Admins group
+func CheckDomainAdminStatus(username string) bool {
+	fmt.Printf("DEBUG: Checking admin status for user: %s\n", username)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Get domain name
+	domainName := getDomainName()
+	if domainName == "" {
+		fmt.Printf("DEBUG: No domain name detected, cannot check admin status\n")
+		return false
+	}
+
+	// Try multiple formats for the username
+	userFormats := []string{
+		username,
+		domainName + "\\" + username,
+		username + "@" + strings.ToLower(domainName) + ".local",
+	}
+
+	for _, userFormat := range userFormats {
+		fmt.Printf("DEBUG: Checking admin status for user format: %s\n", userFormat)
+
+		// Use samba-tool to check group membership
+		cmd := exec.CommandContext(ctx, "samba-tool", "group", "listmembers", "Domain Admins")
+		output, err := cmd.Output()
+		if err != nil {
+			fmt.Printf("DEBUG: Failed to list Domain Admins: %v\n", err)
+			continue
+		}
+
+		members := strings.Split(string(output), "\n")
+		for _, member := range members {
+			member = strings.TrimSpace(member)
+			if member == userFormat || member == username {
+				fmt.Printf("DEBUG: User %s found in Domain Admins group\n", username)
+				return true
+			}
+		}
+	}
+
+	fmt.Printf("DEBUG: User %s is NOT in Domain Admins group\n", username)
+	return false
+}
+
 // tryKerberosAuth attempts Kerberos authentication
 func tryKerberosAuth(username, password, domainName string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
