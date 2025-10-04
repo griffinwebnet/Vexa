@@ -113,9 +113,12 @@ export default function SetupWizard() {
           const lines = chunk.split('\n')
           
           for (const line of lines) {
-            if (line.startsWith('data: ')) {
+            const trimmedLine = line.trim()
+            if (trimmedLine.startsWith('data: ')) {
               try {
-                const data = JSON.parse(line.slice(6))
+                const jsonStr = trimmedLine.slice(6).trim()
+                console.log('JSON string to parse:', jsonStr)
+                const data = JSON.parse(jsonStr)
                 console.log('Parsed SSE data:', data) // Console logging for debugging
                 
                 if (data.type === 'output') {
@@ -144,13 +147,21 @@ export default function SetupWizard() {
                   ) {
                     console.log('Updating status to:', content)
                     setCurrentStatus(content)
+                    
+                    // Force success if we see completion message
+                    if (content === 'Domain provisioning completed!') {
+                      console.log('FORCING SUCCESS STATE due to completion message')
+                      setProvisioningState('success')
+                    }
                   }
                 } else if (data.type === 'complete') {
                   console.log('=== COMPLETE EVENT RECEIVED ===') // Console logging for debugging
                   console.log('Complete event data:', data)
+                  console.log('Current provisioning state before:', provisioningState)
                   console.log('Setting provisioning state to success')
                   setCurrentStatus('Domain provisioning completed successfully!')
                   setProvisioningState('success')
+                  console.log('Provisioning state set to success')
                   
                   // Auto-redirect after 3 seconds
                   setTimeout(() => {

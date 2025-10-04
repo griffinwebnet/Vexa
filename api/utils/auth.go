@@ -26,60 +26,32 @@ func AuthenticatePAM(username, password string) bool {
 func AuthenticateSAMBA(username, password string) bool {
 	fmt.Printf("DEBUG: Attempting SAMBA authentication for user: %s\n", username)
 
-	// Use smbclient to authenticate against the domain
-	// This requires Samba client tools
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	// Get domain name dynamically
 	domainName := getDomainName()
 	fmt.Printf("DEBUG: Using domain name: %s\n", domainName)
 
-	// Try multiple authentication methods for domain users
-	targets := []string{
-		"//localhost/netlogon",
-		"//localhost/ipc$",
-		"//localhost/c$",
+	// Method 1: Try wbinfo for domain authentication (most reliable)
+	if tryWbinfoAuth(username, password, domainName) {
+		fmt.Printf("DEBUG: wbinfo authentication successful for %s\n", username)
+		return true
 	}
 
-	// Try without domain prefix first
-	for _, target := range targets {
-		fmt.Printf("DEBUG: Trying smbclient %s with user %s\n", target, username)
-		cmd := exec.CommandContext(ctx, "smbclient", target, "-U", username+"%"+password, "-c", "exit")
-		err := cmd.Run()
-		if err == nil {
-			fmt.Printf("DEBUG: SAMBA authentication successful for %s\n", username)
-			return true
-		}
-		fmt.Printf("DEBUG: smbclient failed for %s: %v\n", target, err)
+	// Method 2: Try ntlm_auth (if available)
+	if tryNtlmAuth(username, password, domainName) {
+		fmt.Printf("DEBUG: ntlm_auth authentication successful for %s\n", username)
+		return true
 	}
 
-	// Try with domain prefix if username doesn't already have it
-	if !strings.Contains(username, "\\") && !strings.Contains(username, "@") && domainName != "" {
-		fmt.Printf("DEBUG: Trying with domain prefix %s\\%s\n", domainName, username)
-		cmd := exec.CommandContext(ctx, "smbclient", "//localhost/netlogon", "-U", domainName+"\\"+username+"%"+password, "-c", "exit")
-		err := cmd.Run()
-		if err == nil {
-			fmt.Printf("DEBUG: SAMBA authentication successful for %s\\%s\n", domainName, username)
-			return true
-		}
-		fmt.Printf("DEBUG: smbclient with domain prefix failed: %v\n", err)
+	// Method 3: Try smbclient authentication
+	if trySmbclientAuth(username, password, domainName, ctx) {
+		fmt.Printf("DEBUG: smbclient authentication successful for %s\n", username)
+		return true
 	}
 
-	// Try with realm format
-	if domainName != "" {
-		realm := strings.ToLower(domainName) + ".local"
-		fmt.Printf("DEBUG: Trying with realm format %s@%s\n", username, realm)
-		cmd := exec.CommandContext(ctx, "smbclient", "//localhost/netlogon", "-U", username+"@"+realm+"%"+password, "-c", "exit")
-		err := cmd.Run()
-		if err == nil {
-			fmt.Printf("DEBUG: SAMBA authentication successful for %s@%s\n", username, realm)
-			return true
-		}
-		fmt.Printf("DEBUG: smbclient with realm format failed: %v\n", err)
-	}
-
-	// Try Kerberos authentication as a last resort
+	// Method 4: Try Kerberos authentication as a last resort
 	if domainName != "" {
 		fmt.Printf("DEBUG: Trying Kerberos authentication for %s\n", username)
 		if tryKerberosAuth(username, password, domainName) {
@@ -140,5 +112,100 @@ func tryKerberosAuth(username, password, domainName string) bool {
 	}
 
 	fmt.Printf("DEBUG: kinit failed: %v\n", err)
+	return false
+}
+
+// tryWbinfoAuth attempts authentication using wbinfo
+func tryWbinfoAuth(username, password, domainName string) bool {
+	if domainName == "" {
+		return false
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Try with domain prefix
+	fullUser := domainName + "\\" + username
+	fmt.Printf("DEBUG: Trying wbinfo authentication for %s\n", fullUser)
+
+	cmd := exec.CommandContext(ctx, "wbinfo", "--authenticate", fullUser+"%"+password)
+	err := cmd.Run()
+	if err == nil {
+		return true
+	}
+
+	fmt.Printf("DEBUG: wbinfo authentication failed: %v\n", err)
+	return false
+}
+
+// tryNtlmAuth attempts authentication using ntlm_auth
+func tryNtlmAuth(username, password, domainName string) bool {
+	if domainName == "" {
+		return false
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Try ntlm_auth
+	fmt.Printf("DEBUG: Trying ntlm_auth for %s\n", username)
+
+	cmd := exec.CommandContext(ctx, "ntlm_auth", "--username="+username, "--password="+password, "--domain="+domainName)
+	output, err := cmd.Output()
+
+	if err == nil && strings.Contains(string(output), "NT_STATUS_OK") {
+		fmt.Printf("DEBUG: ntlm_auth successful\n")
+		return true
+	}
+
+	fmt.Printf("DEBUG: ntlm_auth failed: %v, output: %s\n", err, string(output))
+	return false
+}
+
+// trySmbclientAuth attempts authentication using smbclient
+func trySmbclientAuth(username, password, domainName string, ctx context.Context) bool {
+	// Try multiple authentication methods for domain users
+	targets := []string{
+		"//localhost/netlogon",
+		"//localhost/ipc$",
+	}
+
+	// Try without domain prefix first
+	for _, target := range targets {
+		fmt.Printf("DEBUG: Trying smbclient %s with user %s\n", target, username)
+		cmd := exec.CommandContext(ctx, "smbclient", target, "-U", username+"%"+password, "-c", "exit")
+		err := cmd.Run()
+		if err == nil {
+			fmt.Printf("DEBUG: smbclient authentication successful for %s\n", username)
+			return true
+		}
+		fmt.Printf("DEBUG: smbclient failed for %s: %v\n", target, err)
+	}
+
+	// Try with domain prefix if username doesn't already have it
+	if !strings.Contains(username, "\\") && !strings.Contains(username, "@") && domainName != "" {
+		fmt.Printf("DEBUG: Trying smbclient with domain prefix %s\\%s\n", domainName, username)
+		cmd := exec.CommandContext(ctx, "smbclient", "//localhost/netlogon", "-U", domainName+"\\"+username+"%"+password, "-c", "exit")
+		err := cmd.Run()
+		if err == nil {
+			fmt.Printf("DEBUG: smbclient authentication successful for %s\\%s\n", domainName, username)
+			return true
+		}
+		fmt.Printf("DEBUG: smbclient with domain prefix failed: %v\n", err)
+	}
+
+	// Try with realm format
+	if domainName != "" {
+		realm := strings.ToLower(domainName) + ".local"
+		fmt.Printf("DEBUG: Trying smbclient with realm format %s@%s\n", username, realm)
+		cmd := exec.CommandContext(ctx, "smbclient", "//localhost/netlogon", "-U", username+"@"+realm+"%"+password, "-c", "exit")
+		err := cmd.Run()
+		if err == nil {
+			fmt.Printf("DEBUG: smbclient authentication successful for %s@%s\n", username, realm)
+			return true
+		}
+		fmt.Printf("DEBUG: smbclient with realm format failed: %v\n", err)
+	}
+
 	return false
 }

@@ -2,24 +2,25 @@ package services
 
 import (
 	"fmt"
+	"os/exec"
 	"strings"
 	"time"
 
-	"github.com/vexa/api/exec"
+	vexaexec "github.com/vexa/api/exec"
 	"github.com/vexa/api/models"
 )
 
 // DomainService handles domain-related business logic
 type DomainService struct {
-	sambaTool *exec.SambaTool
-	system    *exec.System
+	sambaTool *vexaexec.SambaTool
+	system    *vexaexec.System
 }
 
 // NewDomainService creates a new DomainService instance
 func NewDomainService() *DomainService {
 	return &DomainService{
-		sambaTool: exec.NewSambaTool(),
-		system:    exec.NewSystem(),
+		sambaTool: vexaexec.NewSambaTool(),
+		system:    vexaexec.NewSystem(),
 	}
 }
 
@@ -47,7 +48,7 @@ func (s *DomainService) ProvisionDomain(req models.ProvisionDomainRequest) error
 	// Generate a secure admin password
 	adminPassword := generateAdminPassword()
 
-	options := exec.DomainProvisionOptions{
+	options := vexaexec.DomainProvisionOptions{
 		Domain:        req.Domain,
 		Realm:         req.Realm,
 		AdminPassword: adminPassword,
@@ -90,45 +91,132 @@ func (s *DomainService) GetDomainStatus() (*models.DomainStatusResponse, error) 
 	}
 
 	if provisioned {
-		// Parse domain info from samba-tool domain info output
-		output, err := s.sambaTool.DomainInfo("127.0.0.1")
-		if err == nil {
-			// Debug: log the actual output
-			fmt.Printf("DEBUG: samba-tool domain info output:\n%s\n", output)
+		// Try multiple methods to get domain info
+		domain, realm := s.getDomainInfo()
 
-			// Parse domain and realm from output
-			lines := strings.Split(output, "\n")
-			for _, line := range lines {
-				line = strings.TrimSpace(line)
-				// Look for NetBIOS Domain (short domain name)
-				if strings.Contains(line, "NetBIOS Domain:") {
-					parts := strings.Split(line, ":")
-					if len(parts) > 1 {
-						response.Domain = strings.TrimSpace(parts[1])
-						fmt.Printf("DEBUG: Found Domain: %s\n", response.Domain)
-					}
-				}
-				// Look for DNS Domain (realm)
-				if strings.Contains(line, "DNS Domain:") {
-					parts := strings.Split(line, ":")
-					if len(parts) > 1 {
-						response.Realm = strings.TrimSpace(parts[1])
-						fmt.Printf("DEBUG: Found Realm: %s\n", response.Realm)
-					}
-				}
-			}
-		}
-
-		// Fallback values if parsing failed
-		if response.Domain == "" {
+		if domain != "" {
+			response.Domain = domain
+		} else {
 			response.Domain = "PROVISIONED"
 		}
-		if response.Realm == "" {
+
+		if realm != "" {
+			response.Realm = realm
+		} else {
 			response.Realm = "PROVISIONED"
 		}
+
+		fmt.Printf("DEBUG: Final domain info - Domain: %s, Realm: %s\n", response.Domain, response.Realm)
 	}
 
 	return response, nil
+}
+
+// getDomainInfo tries multiple methods to get domain and realm information
+func (s *DomainService) getDomainInfo() (string, string) {
+	fmt.Printf("DEBUG: Attempting to get domain info\n")
+
+	// Method 1: Try samba-tool domain info
+	domain, realm := s.parseSambaToolDomainInfo()
+	if domain != "" && realm != "" {
+		fmt.Printf("DEBUG: Got domain info from samba-tool: %s, %s\n", domain, realm)
+		return domain, realm
+	}
+
+	// Method 2: Try parsing smb.conf
+	domain2, realm2 := s.parseSmbConf()
+	if domain2 != "" || realm2 != "" {
+		fmt.Printf("DEBUG: Got domain info from smb.conf: %s, %s\n", domain2, realm2)
+		if domain == "" {
+			domain = domain2
+		}
+		if realm == "" {
+			realm = realm2
+		}
+	}
+
+	// Method 3: Try testparm output
+	domain3, realm3 := s.parseTestparm()
+	if domain3 != "" || realm3 != "" {
+		fmt.Printf("DEBUG: Got domain info from testparm: %s, %s\n", domain3, realm3)
+		if domain == "" {
+			domain = domain3
+		}
+		if realm == "" {
+			realm = realm3
+		}
+	}
+
+	fmt.Printf("DEBUG: Final parsed domain info: %s, %s\n", domain, realm)
+	return domain, realm
+}
+
+// parseSambaToolDomainInfo parses output from samba-tool domain info
+func (s *DomainService) parseSambaToolDomainInfo() (string, string) {
+	output, err := s.sambaTool.DomainInfo("127.0.0.1")
+	if err != nil {
+		fmt.Printf("DEBUG: samba-tool domain info failed: %v\n", err)
+		return "", ""
+	}
+
+	fmt.Printf("DEBUG: samba-tool domain info output:\n%s\n", output)
+
+	var domain, realm string
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		// Look for NetBIOS Domain (short domain name)
+		if strings.Contains(line, "NetBIOS Domain:") {
+			parts := strings.Split(line, ":")
+			if len(parts) > 1 {
+				domain = strings.TrimSpace(parts[1])
+				fmt.Printf("DEBUG: Found NetBIOS Domain: %s\n", domain)
+			}
+		}
+		// Look for DNS Domain (realm)
+		if strings.Contains(line, "DNS Domain:") {
+			parts := strings.Split(line, ":")
+			if len(parts) > 1 {
+				realm = strings.TrimSpace(parts[1])
+				fmt.Printf("DEBUG: Found DNS Domain: %s\n", realm)
+			}
+		}
+	}
+
+	return domain, realm
+}
+
+// parseSmbConf parses the smb.conf file for domain info
+func (s *DomainService) parseSmbConf() (string, string) {
+	// This would read /etc/samba/smb.conf and parse workgroup and realm
+	// For now, return empty - implement if needed
+	return "", ""
+}
+
+// parseTestparm parses testparm output for domain info
+func (s *DomainService) parseTestparm() (string, string) {
+	cmd := exec.Command("testparm", "-s", "--parameter-name", "workgroup")
+	output, err := cmd.Output()
+	if err != nil {
+		fmt.Printf("DEBUG: testparm workgroup failed: %v\n", err)
+		return "", ""
+	}
+
+	domain := strings.TrimSpace(string(output))
+	fmt.Printf("DEBUG: testparm workgroup output: %s\n", domain)
+
+	// Get realm
+	cmd2 := exec.Command("testparm", "-s", "--parameter-name", "realm")
+	output2, err2 := cmd2.Output()
+	if err2 != nil {
+		fmt.Printf("DEBUG: testparm realm failed: %v\n", err2)
+		return domain, ""
+	}
+
+	realm := strings.TrimSpace(string(output2))
+	fmt.Printf("DEBUG: testparm realm output: %s\n", realm)
+
+	return domain, realm
 }
 
 // GetDomainInfo returns detailed domain information
@@ -168,7 +256,7 @@ func (s *DomainService) createDefaultGroups() error {
 
 	for _, group := range groups {
 		// Try to create group, ignore if it already exists
-		options := exec.GroupCreateOptions{
+		options := vexaexec.GroupCreateOptions{
 			Description: "", // Empty description for default groups
 		}
 		s.sambaTool.GroupCreate(group, options)
@@ -228,7 +316,7 @@ func (s *DomainService) ProvisionDomainWithOutput(req models.ProvisionDomainRequ
 	adminPassword := generateAdminPassword()
 	outputChan <- "Admin password generated"
 
-	options := exec.DomainProvisionOptions{
+	options := vexaexec.DomainProvisionOptions{
 		Domain:        req.Domain,
 		Realm:         req.Realm,
 		AdminPassword: adminPassword,
@@ -289,7 +377,7 @@ func (s *DomainService) createDefaultGroupsWithOutput(outputChan chan<- string) 
 	for _, group := range groups {
 		outputChan <- fmt.Sprintf("Creating group: %s", group)
 		// Try to create group, ignore if it already exists
-		options := exec.GroupCreateOptions{
+		options := vexaexec.GroupCreateOptions{
 			Description: "", // Empty description for default groups
 		}
 		output, err := s.sambaTool.GroupCreate(group, options)
