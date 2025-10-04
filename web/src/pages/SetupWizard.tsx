@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -17,6 +17,16 @@ export default function SetupWizard() {
   const [currentStatus, setCurrentStatus] = useState('')
   const [domainName, setDomainName] = useState('')
   const [provisioningState, setProvisioningState] = useState<'idle' | 'provisioning' | 'success' | 'error'>('idle')
+  
+  // Ref to track if component is mounted
+  const isMounted = useRef(true)
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMounted.current = false
+    }
+  }, [])
   
   // Debug provisioning state changes
   console.log('Current provisioning state:', provisioningState)
@@ -127,8 +137,10 @@ export default function SetupWizard() {
                   
                   // Show important status messages in UI
                   if (content.startsWith('ERROR:')) {
-                    setError(content.replace('ERROR: ', ''))
-                    setProvisioningState('error')
+                    if (isMounted.current) {
+                      setError(content.replace('ERROR: ', ''))
+                      setProvisioningState('error')
+                    }
                     return
                   } else if (
                     // Show key status messages - be more specific with exact matches
@@ -146,12 +158,28 @@ export default function SetupWizard() {
                     content === 'Domain provisioning completed!'
                   ) {
                     console.log('Updating status to:', content)
-                    setCurrentStatus(content)
+                    if (isMounted.current) {
+                      setCurrentStatus(content)
+                    }
                     
                     // Force success if we see completion message
                     if (content === 'Domain provisioning completed!') {
                       console.log('FORCING SUCCESS STATE due to completion message')
-                      setProvisioningState('success')
+                      if (isMounted.current) {
+                        setProvisioningState('success')
+                      }
+                      
+                      // Auto-redirect after 3 seconds since complete event isn't working
+                      setTimeout(() => {
+                        console.log('Auto-redirecting to dashboard from completion message')
+                        localStorage.setItem('vexa-setup-complete', 'true')
+                        localStorage.setItem('vexa-domain-info', JSON.stringify({
+                          domain: domainName,
+                          realm: formData.realm
+                        }))
+                        queryClient.invalidateQueries({ queryKey: ['domainStatus'] })
+                        window.location.href = '/'
+                      }, 3000)
                     }
                   }
                 } else if (data.type === 'complete') {

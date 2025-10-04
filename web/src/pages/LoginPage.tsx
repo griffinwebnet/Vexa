@@ -6,6 +6,9 @@ import { Input } from '../components/ui/Input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import api from '../lib/api'
 
+// Get version from package.json
+const VERSION = '0.1.40'
+
 export default function LoginPage() {
   const navigate = useNavigate()
   const login = useAuthStore((state) => state.login)
@@ -36,7 +39,12 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/10 via-background to-background">
+    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/10 via-background to-background">
+      {/* Version number in bottom right corner */}
+      <div className="absolute bottom-4 right-4 text-xs text-muted-foreground/60 font-mono">
+        v{VERSION}
+      </div>
+      
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <CardTitle className="text-3xl font-bold text-center bg-gradient-to-r from-yellow-400 to-amber-600 bg-clip-text text-transparent">
