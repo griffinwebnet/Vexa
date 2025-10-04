@@ -12,6 +12,18 @@ import (
 // to the wizard).
 func ProvisioningGate() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Allow auth and domain provisioning endpoints to pass through
+		path := c.FullPath()
+		if path == "/api/v1/auth/login" ||
+			path == "/api/v1/domain/provision" ||
+			path == "/api/v1/domain/provision-with-output" ||
+			path == "/api/v1/domain/status" ||
+			path == "/api/v1/version" ||
+			path == "/health" {
+			c.Next()
+			return
+		}
+
 		domainService := services.NewDomainService()
 		status, err := domainService.GetDomainStatus()
 		if err == nil && status != nil && !status.Provisioned {

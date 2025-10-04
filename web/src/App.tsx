@@ -21,7 +21,6 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAdmin = useAuthStore((state) => state.isAdmin)
   const token = useAuthStore((state) => state.token)
   const [provisioned, setProvisioned] = useState<boolean | null>(null)
-  const setupCompleteLocal = localStorage.getItem('vexa-setup-complete') === 'true'
 
   useEffect(() => {
     let cancelled = false
@@ -49,7 +48,8 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" />
   }
 
-  const effectiveProvisioned = provisioned !== null ? provisioned : setupCompleteLocal
+  // Be strict: if unknown, treat as unprovisioned to avoid exposing UI
+  const effectiveProvisioned = provisioned === true
 
   // If system is NOT provisioned: only admins may proceed to the wizard
   if (!effectiveProvisioned) {
