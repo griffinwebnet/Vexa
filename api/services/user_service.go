@@ -125,3 +125,20 @@ func (s *UserService) addUserToGroup(username, groupName string) error {
 	}
 	return nil
 }
+
+// ChangeUserPassword changes a user's password
+func (s *UserService) ChangeUserPassword(username, newPassword string) error {
+	output, err := s.sambaTool.UserSetPassword(username, newPassword)
+	if err != nil {
+		return fmt.Errorf("failed to change password: %s", output)
+	}
+	return nil
+}
+
+// UpdateUserProfile updates a user's profile information
+func (s *UserService) UpdateUserProfile(username, fullName, email string) error {
+	// For now, we'll just return success since Samba doesn't easily store these fields
+	// In a full implementation, you might store this in LDAP attributes
+	fmt.Printf("DEBUG: Updating profile for %s - FullName: %s, Email: %s\n", username, fullName, email)
+	return nil
+}

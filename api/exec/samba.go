@@ -66,6 +66,11 @@ func (s *SambaTool) UserEnable(username string) (string, error) {
 	return s.Run("user", "enable", username)
 }
 
+// UserSetPassword sets a new password for a user
+func (s *SambaTool) UserSetPassword(username, password string) (string, error) {
+	return s.Run("user", "setpassword", username, "--newpassword="+password)
+}
+
 // DNSForwarders sets DNS forwarders for the domain
 func (s *SambaTool) DNSForwarders(forwarders []string) (string, error) {
 	args := []string{"dns", "server", "set", "forwarder"}

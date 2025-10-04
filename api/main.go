@@ -13,7 +13,7 @@ import (
 // Global dev mode flag
 var DevMode bool
 
-const Version = "0.1.47"
+const Version = "0.1.48"
 
 func main() {
 	// Parse command line flags
@@ -81,6 +81,10 @@ func main() {
 		protected.POST("/users/:id/reset-password", handlers.ResetUserPassword)
 		protected.POST("/users/:id/disable", userHandler.DisableUser)
 		protected.POST("/users/:id/enable", userHandler.EnableUser)
+
+		// Self-service endpoints
+		protected.POST("/users/change-password", userHandler.ChangePassword)
+		protected.POST("/users/update-profile", userHandler.UpdateProfile)
 
 		// Group management
 		protected.GET("/groups", groupHandler.ListGroups)

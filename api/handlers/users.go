@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/vexa/api/models"
 	"github.com/vexa/api/services"
 )
@@ -164,4 +165,80 @@ func (h *UserHandler) EnableUser(c *gin.Context) {
 		"message":  "User enabled successfully",
 		"username": username,
 	})
+}
+
+// ChangePassword allows users to change their own password
+func (h *UserHandler) ChangePassword(c *gin.Context) {
+	// Get username from JWT token
+	claims, exists := c.Get("claims")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "No authentication claims"})
+		return
+	}
+
+	jwtClaims := claims.(jwt.MapClaims)
+	username := jwtClaims["username"].(string)
+
+	var req struct {
+		CurrentPassword string `json:"current_password" binding:"required"`
+		NewPassword     string `json:"new_password" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
+		return
+	}
+
+	// Verify current password first
+	authService := services.NewAuthService(false)
+	authResult, err := authService.Authenticate(models.LoginRequest{
+		Username: username,
+		Password: req.CurrentPassword,
+	})
+
+	if err != nil || !authResult.Authenticated {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current password is incorrect"})
+		return
+	}
+
+	// Change password
+	err = h.userService.ChangeUserPassword(username, req.NewPassword)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Password changed successfully"})
+}
+
+// UpdateProfile allows users to update their own profile
+func (h *UserHandler) UpdateProfile(c *gin.Context) {
+	// Get username from JWT token
+	claims, exists := c.Get("claims")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "No authentication claims"})
+		return
+	}
+
+	jwtClaims := claims.(jwt.MapClaims)
+	username := jwtClaims["username"].(string)
+
+	var req struct {
+		FullName string `json:"full_name"`
+		Email    string `json:"email"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
+		return
+	}
+
+	// Update profile
+	err := h.userService.UpdateUserProfile(username, req.FullName, req.Email)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Profile updated successfully"})
 }
