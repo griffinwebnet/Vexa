@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/vexa/api/exec"
 )
@@ -68,4 +69,72 @@ func (s *HeadscaleService) IsEnabled() bool {
 	}
 
 	return s.headscaleTool.IsEnabled()
+}
+
+// GetLoginServerBase returns the Headscale login server base URL without the
+// "/mesh" suffix. Preference order:
+// 1) HEADSCALE_SERVER_URL env var
+// 2) /etc/headscale/config.yaml server_url
+// Returns empty string if not found.
+func (s *HeadscaleService) GetLoginServerBase() string {
+	// Prefer explicit env var
+	if url := strings.TrimSpace(os.Getenv("HEADSCALE_SERVER_URL")); url != "" {
+		return trimMeshAndSlash(url)
+	}
+
+	// Fallback: parse headscale config
+	content, err := os.ReadFile("/etc/headscale/config.yaml")
+	if err == nil {
+		lines := strings.Split(string(content), "\n")
+		for _, raw := range lines {
+			line := strings.TrimSpace(raw)
+			if strings.HasPrefix(line, "server_url:") {
+				val := strings.TrimSpace(strings.TrimPrefix(line, "server_url:"))
+				// remove optional quotes
+				val = strings.Trim(val, "\"'")
+				return trimMeshAndSlash(val)
+			}
+		}
+	}
+
+	return ""
+}
+
+// GetLoginServerFull returns the Headscale login-server URL suitable for
+// passing directly to `tailscale up --login-server`. Preference order:
+// 1) HEADSCALE_SERVER_URL env var (expected to include scheme and path)
+// 2) /etc/headscale/config.yaml server_url
+// Returns empty string if not found.
+func (s *HeadscaleService) GetLoginServerFull() string {
+	if url := strings.TrimSpace(os.Getenv("HEADSCALE_SERVER_URL")); url != "" {
+		return url
+	}
+
+	content, err := os.ReadFile("/etc/headscale/config.yaml")
+	if err == nil {
+		lines := strings.Split(string(content), "\n")
+		for _, raw := range lines {
+			line := strings.TrimSpace(raw)
+			if strings.HasPrefix(line, "server_url:") {
+				val := strings.TrimSpace(strings.TrimPrefix(line, "server_url:"))
+				val = strings.Trim(val, "\"'")
+				return val
+			}
+		}
+	}
+
+	return ""
+}
+
+func trimMeshAndSlash(u string) string {
+	// remove trailing slash first
+	u = strings.TrimSpace(u)
+	for strings.HasSuffix(u, "/") {
+		u = strings.TrimSuffix(u, "/")
+	}
+	// then remove trailing /mesh if present
+	if strings.HasSuffix(strings.ToLower(u), "/mesh") {
+		u = u[:len(u)-len("/mesh")]
+	}
+	return u
 }

@@ -160,6 +160,7 @@ func CheckDomainAdminStatus(username string) bool {
 
 // VerifyCurrentPassword verifies a user's current password directly against Samba
 func VerifyCurrentPassword(username, password string) bool {
+	fmt.Printf("DEBUG: VerifyCurrentPassword called for user: %s\n", username)
 	fmt.Printf("DEBUG: Verifying current password for user: %s\n", username)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

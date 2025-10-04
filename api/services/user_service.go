@@ -128,10 +128,13 @@ func (s *UserService) addUserToGroup(username, groupName string) error {
 
 // ChangeUserPassword changes a user's password
 func (s *UserService) ChangeUserPassword(username, newPassword string) error {
+	fmt.Printf("DEBUG: Changing password for user: %s\n", username)
 	output, err := s.sambaTool.UserSetPassword(username, newPassword)
 	if err != nil {
+		fmt.Printf("DEBUG: Failed to change password for %s: %v, output: %s\n", username, err, output)
 		return fmt.Errorf("failed to change password: %s", output)
 	}
+	fmt.Printf("DEBUG: Password changed successfully for user: %s\n", username)
 	return nil
 }
 

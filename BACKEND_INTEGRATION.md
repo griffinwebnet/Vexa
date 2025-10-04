@@ -88,6 +88,12 @@ This document verifies that all UI features are properly connected to Samba, Hea
 | Mesh Domain | ✅ Settings.tsx | ✅ Config YAML | base_domain: .mesh |
 | Public DERP | ✅ Settings.tsx | ✅ Config YAML | urls: controlplane.tailscale.com |
 
+Environment/config:
+
+- Set `HEADSCALE_SERVER_URL` to your Headscale login server (e.g., `http://vpn.example.com/mesh`).
+- If unset, the backend reads `/etc/headscale/config.yaml` `server_url`.
+- Deployment scripts and server join use this value for `--login-server`.
+
 ## ✅ DNS Management
 
 | Feature | Frontend | Backend | Service |

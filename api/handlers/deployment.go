@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vexa/api/services"
@@ -228,10 +229,20 @@ func (h *DeploymentHandler) ServeDeploymentScript(c *gin.Context) {
 		return
 	}
 
+	// Replace template variables with actual values
+	// Resolve login server URL (full) used by tailscale up
+	loginServer := h.headscaleService.GetLoginServerFull()
+	if loginServer == "" {
+		// fall back to API base + /mesh when none configured
+		loginServer = getBaseURL(c) + "/mesh"
+	}
+	processed := strings.ReplaceAll(string(scriptContent), "{{LOGIN_SERVER}}", loginServer)
+	processedContent := processed
+
 	// Set appropriate headers
 	c.Header("Content-Type", "text/plain")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", scriptName))
-	c.String(http.StatusOK, string(scriptContent))
+	c.String(http.StatusOK, processedContent)
 }
 
 // Helper function to get base URL
@@ -242,7 +253,7 @@ func getBaseURL(c *gin.Context) string {
 	}
 	host := c.Request.Host
 	if host == "" {
-		host = "localhost:8080"
+		host = "localhost:8080" // Vexa API port (Headscale is on 8443 and proxied via /mesh/)
 	}
 	return fmt.Sprintf("%s://%s", scheme, host)
 }

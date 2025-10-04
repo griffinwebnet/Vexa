@@ -47,7 +47,7 @@ try {
     # Step 2: Connect to Tailnet (if auth key provided)
     if ($TailscaleAuthKey) {
         Write-Host "🔗 Connecting to Tailnet..." -ForegroundColor Yellow
-        & "C:\Program Files\Tailscale\tailscale.exe" login --authkey $TailscaleAuthKey
+        & "C:\Program Files\Tailscale\tailscale.exe" up --authkey $TailscaleAuthKey --login-server "{{LOGIN_SERVER}}" --accept-routes --accept-dns=false --hostname $ComputerName
     } else {
         Write-Host "🔗 Please complete Tailscale login manually..." -ForegroundColor Yellow
         & "C:\Program Files\Tailscale\tailscale.exe" login

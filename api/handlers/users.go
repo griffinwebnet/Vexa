@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -170,9 +171,12 @@ func (h *UserHandler) EnableUser(c *gin.Context) {
 
 // ChangePassword allows users to change their own password
 func (h *UserHandler) ChangePassword(c *gin.Context) {
+	fmt.Printf("DEBUG: ChangePassword endpoint called\n")
+
 	// Get username from JWT token
 	claims, exists := c.Get("claims")
 	if !exists {
+		fmt.Printf("DEBUG: No authentication claims found\n")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "No authentication claims"})
 		return
 	}

@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -64,8 +65,24 @@ func (s *OverlayService) installHeadscale() error {
 	}
 
 	// Download latest Headscale binary
+	// Detect architecture and download appropriate binary
+	arch := "amd64"
+	if unameM, err := exec.Command("uname", "-m").Output(); err == nil {
+		archStr := strings.TrimSpace(string(unameM))
+		switch archStr {
+		case "x86_64":
+			arch = "amd64"
+		case "aarch64":
+			arch = "arm64"
+		default:
+			arch = "amd64" // fallback
+		}
+	}
+
+	fmt.Printf("DEBUG: Detected architecture: %s\n", arch)
+
 	cmd := exec.Command("curl", "-L", "-o", "/usr/local/bin/headscale",
-		"https://github.com/juanfont/headscale/releases/latest/download/headscale_linux_amd64")
+		fmt.Sprintf("https://github.com/juanfont/headscale/releases/latest/download/headscale_linux_%s", arch))
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to download headscale: %v", err)
 	}
@@ -95,10 +112,11 @@ func (s *OverlayService) configureHeadscale(fqdn string) error {
 	domain := strings.Split(fqdn, ".")[0]
 
 	// Create config from template
+	// Use the same FQDN for Headscale server URL (this should be the public/routable address)
 	tmpl := template.Must(template.New("config").Parse(`---
 # Vexa Mesh Configuration
-server_url: https://{{ .FQDN }}
-listen_addr: 0.0.0.0:8080
+server_url: http://{{ .FQDN }}/mesh
+listen_addr: 0.0.0.0:8443
 metrics_listen_addr: 127.0.0.1:9090
 grpc_listen_addr: 0.0.0.0:50443
 grpc_allow_insecure: true
@@ -155,20 +173,20 @@ dns:
     global:
       - 100.64.0.1
     split:
-      {{ .Domain }}.internal:
+      {{ .Domain }}.local:
         - 100.64.0.1
-  search_domains: 
-    - {{ .Domain }}.internal
+  search_domains:
+    - {{ .Domain }}.local
     - {{ .Domain }}.mesh
     - {{ .Domain }}
   extra_records:
-    - name: "{{ .Domain }}.internal"
+    - name: "{{ .Domain }}.local"
       type: "A"
       value: "100.64.0.1"
     - name: "{{ .Domain }}"
       type: "A"
       value: "100.64.0.1"
-    - name: "dc-01.{{ .Domain }}.internal"
+    - name: "dc-01.{{ .Domain }}.local"
       type: "A"
       value: "100.64.0.1"
 
@@ -210,7 +228,7 @@ After=network.target
 Type=simple
 User=root
 Group=root
-ExecStart=/usr/local/bin/headscale serve
+ExecStart=/usr/local/bin/headscale serve -c /etc/headscale/config.yaml
 Restart=always
 RestartSec=5
 Environment=HOME=/var/lib/headscale
@@ -276,9 +294,29 @@ func (s *OverlayService) joinMesh() error {
 	}
 	authKey := strings.TrimSpace(string(output))
 
+	// Determine login server from headscale config/env if available
+	loginServer := os.Getenv("HEADSCALE_SERVER_URL")
+	if loginServer == "" {
+		if content, err := os.ReadFile("/etc/headscale/config.yaml"); err == nil {
+			lines := strings.Split(string(content), "\n")
+			for _, raw := range lines {
+				line := strings.TrimSpace(raw)
+				if strings.HasPrefix(line, "server_url:") {
+					val := strings.TrimSpace(strings.TrimPrefix(line, "server_url:"))
+					val = strings.Trim(val, "\"'")
+					loginServer = val
+					break
+				}
+			}
+		}
+	}
+	if loginServer == "" {
+		loginServer = "http://localhost:8080/mesh"
+	}
+
 	// Join mesh
 	cmd = exec.Command("tailscale", "up",
-		"--login-server=http://localhost:8080",
+		"--login-server="+loginServer,
 		"--authkey="+authKey,
 		"--accept-routes",
 		"--accept-dns=false",
@@ -301,8 +339,24 @@ func (s *OverlayService) AddMachine(name string) (*JoinScripts, error) {
 	}
 	authKey := strings.TrimSpace(string(output))
 
-	// Get server URL
-	serverURL := "http://localhost:8080" // TODO: Get from config
+	// Get login server URL from config/env
+	serverURL := os.Getenv("HEADSCALE_SERVER_URL")
+	if serverURL == "" {
+		if content, err := os.ReadFile("/etc/headscale/config.yaml"); err == nil {
+			lines := strings.Split(string(content), "\n")
+			for _, raw := range lines {
+				line := strings.TrimSpace(raw)
+				if strings.HasPrefix(line, "server_url:") {
+					val := strings.TrimSpace(strings.TrimPrefix(line, "server_url:"))
+					serverURL = strings.Trim(val, "\"'")
+					break
+				}
+			}
+		}
+	}
+	if serverURL == "" {
+		serverURL = "http://localhost:8080/mesh"
+	}
 
 	// Generate Windows PowerShell script
 	windowsScript := fmt.Sprintf(`# Vexa Domain Join Script (Windows)
@@ -407,13 +461,43 @@ func (s *OverlayService) GetOverlayStatus() (map[string]interface{}, error) {
 		}
 	}
 
+	// Derive configured FQDN from Headscale server_url
+	var fqdn string
+	serverURL := os.Getenv("HEADSCALE_SERVER_URL")
+	if serverURL == "" {
+		if content, err := os.ReadFile("/etc/headscale/config.yaml"); err == nil {
+			lines := strings.Split(string(content), "\n")
+			for _, raw := range lines {
+				line := strings.TrimSpace(raw)
+				if strings.HasPrefix(line, "server_url:") {
+					val := strings.TrimSpace(strings.TrimPrefix(line, "server_url:"))
+					serverURL = strings.Trim(val, "\"'")
+					break
+				}
+			}
+		}
+	}
+	if serverURL != "" {
+		if u, err := url.Parse(serverURL); err == nil && u.Host != "" {
+			fqdn = u.Hostname()
+		} else {
+			// fallback: strip scheme manually
+			s := serverURL
+			if strings.Contains(s, "://") {
+				parts := strings.SplitN(s, "://", 2)
+				s = parts[1]
+			}
+			fqdn = strings.Split(s, "/")[0]
+		}
+	}
+
 	return map[string]interface{}{
 		"enabled":     headscaleActive && tailscaleActive,
 		"headscale":   headscaleActive,
 		"tailscale":   tailscaleActive,
 		"ip":          ip,
 		"hostname":    hostname,
-		"fqdn":        "", // TODO: Get from config
+		"fqdn":        fqdn,
 		"mesh_domain": "mesh",
 	}, nil
 }
