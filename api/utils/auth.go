@@ -33,6 +33,11 @@ func AuthenticateSAMBA(username, password string) bool {
 	domainName := getDomainName()
 	fmt.Printf("DEBUG: Using domain name: %s\n", domainName)
 
+	if domainName == "" {
+		fmt.Printf("DEBUG: No domain name detected, cannot perform SAMBA authentication\n")
+		return false
+	}
+
 	// Method 1: Try wbinfo for domain authentication (most reliable)
 	if tryWbinfoAuth(username, password, domainName) {
 		fmt.Printf("DEBUG: wbinfo authentication successful for %s\n", username)
@@ -52,12 +57,18 @@ func AuthenticateSAMBA(username, password string) bool {
 	}
 
 	// Method 4: Try Kerberos authentication as a last resort
-	if domainName != "" {
-		fmt.Printf("DEBUG: Trying Kerberos authentication for %s\n", username)
-		if tryKerberosAuth(username, password, domainName) {
-			fmt.Printf("DEBUG: Kerberos authentication successful for %s\n", username)
-			return true
-		}
+	fmt.Printf("DEBUG: Trying Kerberos authentication for %s\n", username)
+	if tryKerberosAuth(username, password, domainName) {
+		fmt.Printf("DEBUG: Kerberos authentication successful for %s\n", username)
+		return true
+	}
+
+	// Method 5: Try simple smbclient without domain (for local users)
+	fmt.Printf("DEBUG: Trying simple smbclient authentication for %s\n", username)
+	cmd := exec.CommandContext(ctx, "smbclient", "//localhost/ipc$", "-U", username+"%"+password, "-c", "exit")
+	if err := cmd.Run(); err == nil {
+		fmt.Printf("DEBUG: Simple smbclient authentication successful for %s\n", username)
+		return true
 	}
 
 	fmt.Printf("DEBUG: All SAMBA authentication attempts failed for %s\n", username)
