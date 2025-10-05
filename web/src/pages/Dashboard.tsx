@@ -3,9 +3,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Users, UsersRound, Monitor, Activity, User, Shield, Clock } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 import api from '../lib/api'
+import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 export default function Dashboard() {
-  const { isAdmin } = useAuthStore()
+  const { isAdmin, isDomainUser } = useAuthStore()
+  const navigate = useNavigate()
+  
+  // Redirect non-admin domain users to self-service
+  useEffect(() => {
+    if (isDomainUser && !isAdmin) {
+      navigate('/self-service')
+    }
+  }, [isDomainUser, isAdmin, navigate])
   const { data: domainStatus } = useQuery({
     queryKey: ['domainStatus'],
     queryFn: async () => {

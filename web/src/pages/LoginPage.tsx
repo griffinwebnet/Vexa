@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import api from '../lib/api'
 
 // Get version from package.json
-const VERSION = '0.1.54'
+const VERSION = '0.1.55'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -32,9 +32,17 @@ export default function LoginPage() {
         password,
       })
 
-      console.log('Login successful:', response.data)
-      const { token, username: user, is_admin } = response.data
-      login(token, user, is_admin)
+      console.log('Login response:', response.data)
+      
+      // Check if setup is required
+      if (response.data.requires_setup) {
+        console.log('Domain setup required, redirecting to wizard')
+        navigate('/wizard')
+        return
+      }
+
+      const { token, username: user, is_admin, is_domain_user } = response.data
+      login(token, user, is_admin, is_domain_user)
       navigate('/')
     } catch (err: any) {
       console.error('=== LOGIN FAILED ===')

@@ -5,8 +5,9 @@ interface AuthState {
   token: string | null
   username: string | null
   isAdmin: boolean
+  isDomainUser: boolean
   isAuthenticated: boolean
-  login: (token: string, username: string, isAdmin: boolean) => void
+  login: (token: string, username: string, isAdmin: boolean, isDomainUser: boolean) => void
   logout: () => void
 }
 
@@ -16,11 +17,12 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       username: null,
       isAdmin: false,
+      isDomainUser: false,
       isAuthenticated: false,
-      login: (token, username, isAdmin) =>
-        set({ token, username, isAdmin, isAuthenticated: true }),
+      login: (token, username, isAdmin, isDomainUser) =>
+        set({ token, username, isAdmin, isDomainUser, isAuthenticated: true }),
       logout: () => {
-        set({ token: null, username: null, isAdmin: false, isAuthenticated: false })
+        set({ token: null, username: null, isAdmin: false, isDomainUser: false, isAuthenticated: false })
         // Force redirect to login page
         window.location.href = '/login'
       },

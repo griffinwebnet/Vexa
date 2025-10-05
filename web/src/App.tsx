@@ -57,7 +57,7 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
     }
   }
 
-  // If provisioned: block access to wizard
+  // If provisioned: block access to wizard completely
   if (effectiveProvisioned && window.location.pathname === '/wizard') {
     return <Navigate to="/" />
   }
@@ -74,9 +74,58 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   }
   
   if (!isAdmin) {
-    return <Navigate to="/" />
+    return <Navigate to="/self-service" />
   }
   
+  return <>{children}</>
+}
+
+function DomainUserRoute({ children }: { children: React.ReactNode }) {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+  const isDomainUser = useAuthStore((state) => state.isDomainUser)
+  const isAdmin = useAuthStore((state) => state.isAdmin)
+  
+  if (!isAuthenticated) {
+    return <Navigate to="/login" />
+  }
+
+  // Domain users get self-service access, admins get full access
+  if (isDomainUser && !isAdmin) {
+    return <>{children}</>
+  }
+
+  // Non-domain users (local admins) don't get self-service access
+  if (!isDomainUser) {
+    return <Navigate to="/" />
+  }
+
+  return <>{children}</>
+}
+
+function SetupRoute({ children }: { children: React.ReactNode }) {
+  const [provisioned, setProvisioned] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function fetchStatus() {
+      try {
+        const resp = await fetch('/api/v1/domain/status')
+        if (!resp.ok) throw new Error('status failed')
+        const data = await resp.json()
+        if (!cancelled) setProvisioned(!!data.provisioned)
+      } catch {
+        if (!cancelled) setProvisioned(null)
+      }
+    }
+    fetchStatus()
+    return () => { cancelled = true }
+  }, [])
+
+  // If domain is already provisioned, redirect to login
+  if (provisioned === true) {
+    return <Navigate to="/login" />
+  }
+
   return <>{children}</>
 }
 
@@ -89,9 +138,9 @@ function App() {
           <Route
             path="/wizard"
             element={
-              <PrivateRoute>
+              <SetupRoute>
                 <SetupWizard />
-              </PrivateRoute>
+              </SetupRoute>
             }
           />
           <Route
@@ -103,7 +152,11 @@ function App() {
             }
           >
             <Route index element={<Dashboard />} />
-            <Route path="self-service" element={<SelfService />} />
+            <Route path="self-service" element={
+              <DomainUserRoute>
+                <SelfService />
+              </DomainUserRoute>
+            } />
             
             <Route path="domain" element={
               <AdminRoute>

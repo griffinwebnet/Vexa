@@ -32,26 +32,20 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// If system is unprovisioned and Vexa admin is initialized, allow Vexa login only
+	// Check domain status first
 	domain := services.NewDomainService()
 	status, _ := domain.GetDomainStatus()
 
-	if status != nil && !status.Provisioned && h.vexaAdmin.IsInitialized() {
-		if req.Username == "vexa" && h.vexaAdmin.Verify(req.Username, req.Password) {
-			// Generate token as admin
-			loginResponse, err := h.authService.GenerateToken(req.Username, true)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
-				return
-			}
-			c.JSON(http.StatusOK, loginResponse)
-			return
-		}
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
+	// If no domain is provisioned, bypass login and redirect to setup
+	if status == nil || !status.Provisioned {
+		c.JSON(http.StatusOK, gin.H{
+			"requires_setup": true,
+			"message":        "Domain not configured. Please run initial setup.",
+		})
 		return
 	}
 
-	// Authenticate user via standard flow
+	// Authenticate user via standard flow (domain first, then PAM fallback)
 	authResult, err := h.authService.Authenticate(req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -67,8 +61,16 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	// Check if user has proper authorization
+	if !authResult.IsAdmin && !authResult.IsDomainUser {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "User account not authorized",
+		})
+		return
+	}
+
 	// Generate JWT token
-	loginResponse, err := h.authService.GenerateToken(req.Username, authResult.IsAdmin)
+	loginResponse, err := h.authService.GenerateToken(req.Username, authResult.IsAdmin, authResult.IsDomainUser)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to generate token",
