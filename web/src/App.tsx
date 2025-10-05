@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useAuthStore } from './stores/authStore'
 import { ThemeProvider } from './components/ThemeProvider'
 import LoginPage from './pages/LoginPage'
