@@ -24,56 +24,6 @@ func NewDomainService() *DomainService {
 	}
 }
 
-// ProvisionDomain provisions a new Samba AD DC domain
-func (s *DomainService) ProvisionDomain(req models.ProvisionDomainRequest) error {
-	// Set defaults
-	if req.DNSBackend == "" {
-		req.DNSBackend = "SAMBA_INTERNAL"
-	}
-
-	// Clean up existing Samba configuration to avoid conflicts
-	s.system.RemoveFile("/etc/samba/smb.conf")
-
-	// Stop conflicting services
-	s.system.StopService("smbd")
-	s.system.StopService("nmbd")
-	s.system.StopService("winbind")
-	s.system.StopService("samba-ad-dc")
-
-	// Clean up Samba databases completely to avoid corruption/bugs
-	s.system.RemoveFile("/var/lib/samba/private/sam.ldb")
-	s.system.RemoveFile("/var/lib/samba/private/secrets.ldb")
-	s.system.RemoveFile("/var/cache/samba/gencache.tdb")
-
-	// Generate a secure admin password
-	adminPassword := generateAdminPassword()
-
-	options := vexaexec.DomainProvisionOptions{
-		Domain:        req.Domain,
-		Realm:         req.Realm,
-		AdminPassword: adminPassword,
-		DNSBackend:    req.DNSBackend,
-		DNSForwarder:  req.DNSForwarder,
-	}
-
-	output, err := s.sambaTool.DomainProvision(options)
-	if err != nil {
-		return fmt.Errorf("domain provisioning failed: %s", output)
-	}
-
-	// Create default groups
-	if err := s.createDefaultGroups(); err != nil {
-		return fmt.Errorf("failed to create default groups: %v", err)
-	}
-
-	// Start Samba service
-	if err := s.system.EnableAndStartService("samba-ad-dc"); err != nil {
-		return fmt.Errorf("failed to start Samba AD DC service: %w", err)
-	}
-
-	return nil
-}
-
 // GetDomainStatus returns the current status of the domain controller
 func (s *DomainService) GetDomainStatus() (*models.DomainStatusResponse, error) {
 
@@ -333,9 +283,9 @@ func (s *DomainService) ProvisionDomainWithOutput(req models.ProvisionDomainRequ
 	output, err := s.sambaTool.DomainProvisionWithOutput(options, outputChan)
 	if err != nil {
 		outputChan <- fmt.Sprintf("ERROR: Domain provisioning failed: %s", output)
-		outputChan <- fmt.Sprintf("ERROR: Command exit code indicates failure")
-		outputChan <- fmt.Sprintf("ERROR: Check if samba-tool is installed and accessible")
-		outputChan <- fmt.Sprintf("ERROR: Verify system permissions for domain provisioning")
+		outputChan <- "ERROR: Command exit code indicates failure"
+		outputChan <- "ERROR: Check if samba-tool is installed and accessible"
+		outputChan <- "ERROR: Verify system permissions for domain provisioning"
 		return fmt.Errorf("domain provisioning failed: %s", output)
 	}
 

@@ -21,31 +21,6 @@ func NewDomainHandler() *DomainHandler {
 	}
 }
 
-// ProvisionDomain provisions a new Samba AD DC domain
-func (h *DomainHandler) ProvisionDomain(c *gin.Context) {
-	var req models.ProvisionDomainRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid request format",
-		})
-		return
-	}
-
-	err := h.domainService.ProvisionDomain(req)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Domain provisioned successfully",
-		"domain":  req.Domain,
-		"realm":   req.Realm,
-	})
-}
-
 // DomainStatus returns the current status of the domain controller
 func (h *DomainHandler) DomainStatus(c *gin.Context) {
 	response, err := h.domainService.GetDomainStatus()

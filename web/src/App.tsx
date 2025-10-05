@@ -25,15 +25,14 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
     let cancelled = false
     async function fetchStatus() {
       try {
-        const resp = await fetch('/api/v1/domain/status', {
-          headers: {
-            'Authorization': token ? `Bearer ${token}` : ''
-          }
-        })
+        // Domain status is now public, no auth header needed
+        const resp = await fetch('/api/v1/domain/status')
         if (!resp.ok) throw new Error('status failed')
         const data = await resp.json()
+        console.log('Domain status check result:', data)
         if (!cancelled) setProvisioned(!!data.provisioned)
-      } catch {
+      } catch (err) {
+        console.log('Domain status check failed:', err)
         if (!cancelled) setProvisioned(null)
       }
     }

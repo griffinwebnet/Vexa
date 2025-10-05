@@ -123,7 +123,8 @@ export default function SetupWizard() {
                 realm: formData.realm
               }))
               queryClient.invalidateQueries({ queryKey: ['domainStatus'] })
-              window.location.href = '/'
+              // Force a page reload to ensure clean state
+              window.location.href = '/login'
             }, 2000)
           }
         } catch (err) {
@@ -160,15 +161,19 @@ export default function SetupWizard() {
                     return
                   }
                   
-                  // Update status for meaningful content (filter out noise)
+                  // Update status for meaningful content
                   console.log('Updating status to:', content)
                   
-                  // Only update status for important messages, not every line
-                  if (content && content.length > 10 && 
+                  // Show important messages and some progress indicators
+                  if (content && content.length > 3 && 
                       !content.includes('STDOUT:') && 
                       !content.includes('Applied Domain Update')) {
                     setCurrentStatus(content)
                     console.log('Status update applied:', content)
+                  } else if (content.includes('Applied Domain Update')) {
+                    // Show progress for domain updates
+                    setCurrentStatus('Applying domain updates...')
+                    console.log('Status update applied: Applying domain updates...')
                   } else {
                     console.log('Filtered out status update:', content)
                   }
@@ -190,7 +195,8 @@ export default function SetupWizard() {
                         realm: formData.realm
                       }))
                       queryClient.invalidateQueries({ queryKey: ['domainStatus'] })
-                      window.location.href = '/'
+                      // Force a page reload to ensure clean state
+                      window.location.href = '/login'
                     }, 2000)
                   }
                 } else if (data.type === 'complete') {
@@ -209,7 +215,8 @@ export default function SetupWizard() {
                       realm: formData.realm
                     }))
                     queryClient.invalidateQueries({ queryKey: ['domainStatus'] })
-                    window.location.href = '/'
+                    // Force a page reload to ensure clean state
+                    window.location.href = '/login'
                   }, 2000)
                 } else {
                   console.log('Unknown event type:', data.type, 'Data:', data)
