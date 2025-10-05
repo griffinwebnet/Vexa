@@ -15,27 +15,18 @@ import DomainOUs from './pages/DomainOUs'
 import DomainPolicies from './pages/DomainPolicies'
 import SelfService from './pages/SelfService'
 
-function PrivateRoute({ children }: { children: React.ReactNode }) {
+// Simple route protection - just check if authenticated
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
-  const isDomainUser = useAuthStore((state) => state.isDomainUser)
-
+  
   if (!isAuthenticated) {
     return <Navigate to="/login" />
   }
-
-  // If it's a local admin user (not domain user), they should be in wizard
-  if (!isDomainUser && window.location.pathname !== '/wizard') {
-    return <Navigate to="/wizard" />
-  }
-
-  // If it's a domain user and they're trying to access wizard, redirect to dashboard
-  if (isDomainUser && window.location.pathname === '/wizard') {
-    return <Navigate to="/" />
-  }
-
+  
   return <>{children}</>
 }
 
+// Admin-only routes
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
   const isAdmin = useAuthStore((state) => state.isAdmin)
@@ -51,42 +42,37 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+// Domain user routes (self-service)
 function DomainUserRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
   const isDomainUser = useAuthStore((state) => state.isDomainUser)
-  const isAdmin = useAuthStore((state) => state.isAdmin)
   
   if (!isAuthenticated) {
     return <Navigate to="/login" />
   }
-
-  // Domain users get self-service access, admins get full access
-  if (isDomainUser && !isAdmin) {
-    return <>{children}</>
-  }
-
-  // Non-domain users (local admins) don't get self-service access
+  
   if (!isDomainUser) {
     return <Navigate to="/" />
   }
-
+  
   return <>{children}</>
 }
 
+// Setup wizard route - requires local admin authentication
 function SetupRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+  const isAdmin = useAuthStore((state) => state.isAdmin)
   const isDomainUser = useAuthStore((state) => state.isDomainUser)
-
-  // If not authenticated, redirect to login
+  
   if (!isAuthenticated) {
     return <Navigate to="/login" />
   }
-
-  // If it's a domain user, they shouldn't access wizard
-  if (isDomainUser) {
+  
+  // Only local admins (not domain users) can access setup
+  if (!isAdmin || isDomainUser) {
     return <Navigate to="/" />
   }
-
+  
   return <>{children}</>
 }
 
@@ -107,9 +93,9 @@ function App() {
           <Route
             path="/"
             element={
-              <PrivateRoute>
+              <ProtectedRoute>
                 <DashboardLayout />
-              </PrivateRoute>
+              </ProtectedRoute>
             }
           >
             <Route index element={<Dashboard />} />
@@ -167,4 +153,3 @@ function App() {
 }
 
 export default App
-

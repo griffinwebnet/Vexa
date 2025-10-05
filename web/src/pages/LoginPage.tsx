@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { Button } from '../components/ui/Button'
@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import api from '../lib/api'
 
 // Get version from package.json
-const VERSION = '0.1.62'
+const VERSION = '0.1.63'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -17,7 +17,24 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // No need to check domain status on mount - just show login page
+  // Check domain status on mount to show appropriate message
+  useEffect(() => {
+    const checkDomainStatus = async () => {
+      try {
+        const response = await api.get('/domain/status')
+        const status = response.data
+        
+        // If no domain is provisioned, show setup message
+        if (!status.provisioned) {
+          console.log('No domain provisioned - user needs to authenticate for setup')
+        }
+      } catch (err) {
+        console.error('Failed to check domain status:', err)
+      }
+    }
+    
+    checkDomainStatus()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -26,7 +43,6 @@ export default function LoginPage() {
 
     console.log('=== LOGIN ATTEMPT ===')
     console.log('Username:', username)
-    console.log('Attempting login...')
 
     try {
       const response = await api.post('/auth/login', {
@@ -38,26 +54,41 @@ export default function LoginPage() {
 
       const { token, username: user, is_admin, is_domain_user } = response.data
       login(token, user, is_admin, is_domain_user)
-      
-      // Check if we need to redirect to wizard (for unprovisioned systems)
+
+      // Redirect logic based on user type and domain status
       if (!is_domain_user && is_admin) {
-        console.log('Local admin authenticated, redirecting to wizard')
-        navigate('/wizard')
-      } else {
+        // Local admin - check if domain exists to determine where to go
+        try {
+          const statusResponse = await api.get('/domain/status')
+          const status = statusResponse.data
+          
+          if (!status.provisioned) {
+            console.log('Local admin authenticated, no domain exists - redirecting to wizard')
+            navigate('/wizard')
+          } else {
+            console.log('Local admin authenticated, domain exists - redirecting to dashboard')
+            navigate('/')
+          }
+        } catch (err) {
+          console.error('Failed to check domain status after login:', err)
+          navigate('/')
+        }
+      } else if (is_domain_user) {
+        // Domain user - go to dashboard (will redirect to self-service if not admin)
         console.log('Domain user authenticated, redirecting to dashboard')
+        navigate('/')
+      } else {
+        // This shouldn't happen based on our auth logic, but just in case
+        console.log('Authenticated user, redirecting to dashboard')
         navigate('/')
       }
     } catch (err: any) {
       console.error('=== LOGIN FAILED ===')
-      console.error('Full error:', err)
-      console.error('Response status:', err.response?.status)
-      console.error('Response data:', err.response?.data)
-      console.error('Error message:', err.response?.data?.error)
+      console.error('Error:', err.response?.data?.error)
       
       setError(err.response?.data?.error || 'Login failed. Please try again.')
     } finally {
       setLoading(false)
-      console.log('=== LOGIN ATTEMPT END ===')
     }
   }
 
@@ -124,4 +155,3 @@ export default function LoginPage() {
     </div>
   )
 }
-

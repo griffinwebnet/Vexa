@@ -1,16 +1,19 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Server, GitMerge, Plus, Loader2, CheckCircle, AlertCircle } from 'lucide-react'
+import api from '../lib/api'
 
 type SetupMode = 'new' | 'join' | 'migrate' | null
 
 export default function SetupWizard() {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { token, isAuthenticated } = useAuthStore()
+  const { token, isAuthenticated, isAdmin, isDomainUser } = useAuthStore()
   const [mode, setMode] = useState<SetupMode>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -27,9 +30,47 @@ export default function SetupWizard() {
       isMounted.current = false
     }
   }, [])
-  
-  // Debug provisioning state changes
-  console.log('Current provisioning state:', provisioningState)
+
+  // Check authentication and domain status on mount
+  useEffect(() => {
+    const checkAccess = async () => {
+      // Must be authenticated
+      if (!isAuthenticated) {
+        console.log('Not authenticated, redirecting to login')
+        navigate('/login')
+        return
+      }
+
+      // Must be local admin (not domain user)
+      if (isDomainUser) {
+        console.log('Domain user trying to access wizard, redirecting to dashboard')
+        navigate('/')
+        return
+      }
+
+      // Must be admin
+      if (!isAdmin) {
+        console.log('Non-admin trying to access wizard, redirecting to login')
+        navigate('/login')
+        return
+      }
+
+      // Check if domain is already provisioned
+      try {
+        const response = await api.get('/domain/status')
+        const status = response.data
+        
+        if (status.provisioned) {
+          console.log('Domain already provisioned, redirecting to dashboard')
+          navigate('/')
+        }
+      } catch (err) {
+        console.error('Failed to check domain status:', err)
+      }
+    }
+    
+    checkAccess()
+  }, [isAuthenticated, isDomainUser, isAdmin, navigate])
   
   const [formData, setFormData] = useState({
     realm: '',
@@ -83,7 +124,7 @@ export default function SetupWizard() {
         return
       }
       
-      // Use the new streaming endpoint (authentication required for setup)
+      // Use the streaming endpoint with authentication
       const response = await fetch('/api/v1/domain/provision-with-output', {
         method: 'POST',
         headers: {
@@ -123,8 +164,8 @@ export default function SetupWizard() {
                 realm: formData.realm
               }))
               queryClient.invalidateQueries({ queryKey: ['domainStatus'] })
-              // Force a page reload to ensure clean state
-              window.location.href = '/login'
+              // Redirect to login after successful setup
+              navigate('/login')
             }, 2000)
           }
         } catch (err) {
@@ -138,7 +179,7 @@ export default function SetupWizard() {
           if (done) break
 
           const chunk = decoder.decode(value)
-          console.log('Received chunk:', chunk) // Console logging for debugging
+          console.log('Received chunk:', chunk)
           const lines = chunk.split('\n')
           
           for (const line of lines) {
@@ -148,7 +189,7 @@ export default function SetupWizard() {
                 const jsonStr = trimmedLine.slice(6).trim()
                 console.log('JSON string to parse:', jsonStr)
                 const data = JSON.parse(jsonStr)
-                console.log('Parsed SSE data:', data) // Console logging for debugging
+                console.log('Parsed SSE data:', data)
                 
                 if (data.type === 'output') {
                   const content = data.content
@@ -164,16 +205,15 @@ export default function SetupWizard() {
                   // Update status for meaningful content
                   console.log('Updating status to:', content)
                   
-                  // Always update status for any non-empty content
-                  if (content && content.trim().length > 0) {
-                    // Clean up the content
-                    let cleanContent = content
-                    if (content.includes('STDOUT:')) {
-                      cleanContent = 'Processing domain configuration...'
-                    } else if (content.includes('Applied Domain Update')) {
-                      cleanContent = 'Applying domain updates...'
-                    }
-                    
+                  // Clean up the content for display
+                  let cleanContent = content
+                  if (content.includes('STDOUT:')) {
+                    cleanContent = 'Processing domain configuration...'
+                  } else if (content.includes('Applied Domain Update')) {
+                    cleanContent = 'Applying domain updates...'
+                  }
+                  
+                  if (cleanContent && cleanContent.trim().length > 0) {
                     setCurrentStatus(cleanContent)
                     console.log('Status update applied:', cleanContent)
                   }
@@ -188,15 +228,14 @@ export default function SetupWizard() {
                     
                     // Auto-redirect after 2 seconds
                     setTimeout(() => {
-                      console.log('Auto-redirecting to dashboard from completion message')
+                      console.log('Auto-redirecting to login from completion message')
                       localStorage.setItem('vexa-setup-complete', 'true')
                       localStorage.setItem('vexa-domain-info', JSON.stringify({
                         domain: domainName,
                         realm: formData.realm
                       }))
                       queryClient.invalidateQueries({ queryKey: ['domainStatus'] })
-                      // Force a page reload to ensure clean state
-                      window.location.href = '/login'
+                      navigate('/login')
                     }, 2000)
                   }
                 } else if (data.type === 'complete') {
@@ -208,15 +247,14 @@ export default function SetupWizard() {
                   
                   // Auto-redirect after 2 seconds
                   setTimeout(() => {
-                    console.log('Auto-redirecting to dashboard')
+                    console.log('Auto-redirecting to login')
                     localStorage.setItem('vexa-setup-complete', 'true')
                     localStorage.setItem('vexa-domain-info', JSON.stringify({
                       domain: domainName,
                       realm: formData.realm
                     }))
                     queryClient.invalidateQueries({ queryKey: ['domainStatus'] })
-                    // Force a page reload to ensure clean state
-                    window.location.href = '/login'
+                    navigate('/login')
                   }, 2000)
                 } else {
                   console.log('Unknown event type:', data.type, 'Data:', data)
@@ -237,7 +275,6 @@ export default function SetupWizard() {
       console.log('=== DOMAIN PROVISIONING END ===')
     }
   }
-
 
   if (!mode) {
     return (
@@ -349,7 +386,7 @@ export default function SetupWizard() {
                 {provisioningState === 'success' && (
                   <div>
                     <p className="text-lg font-medium text-green-600">Welcome to {domainName}!</p>
-                    <p className="text-sm text-muted-foreground">Redirecting to dashboard...</p>
+                    <p className="text-sm text-muted-foreground">Redirecting to login...</p>
                   </div>
                 )}
 
@@ -380,16 +417,15 @@ export default function SetupWizard() {
                   <Button 
                     onClick={() => {
                       localStorage.setItem('vexa-setup-complete', 'true')
-                      // Store domain info for immediate display
                       localStorage.setItem('vexa-domain-info', JSON.stringify({
                         domain: domainName,
                         realm: formData.realm
                       }))
                       queryClient.invalidateQueries({ queryKey: ['domainStatus'] })
-                      window.location.href = '/'
+                      navigate('/login')
                     }}
                   >
-                    Go to Dashboard
+                    Go to Login
                   </Button>
                 )}
               </div>
@@ -500,4 +536,3 @@ export default function SetupWizard() {
 
   return null
 }
-
