@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vexa/api/models"
 	"github.com/vexa/api/services"
+	"github.com/vexa/api/utils"
 )
 
 // AuthHandler handles HTTP requests for authentication operations
@@ -24,23 +25,40 @@ func NewAuthHandler(devMode bool) *AuthHandler {
 
 // Login authenticates user against PAM or Active Directory
 func (h *AuthHandler) Login(c *gin.Context) {
-	// Check domain status first - if no domain, bypass authentication entirely
-	domain := services.NewDomainService()
-	status, _ := domain.GetDomainStatus()
-
-	// If no domain is provisioned, bypass login and redirect to setup
-	if status == nil || !status.Provisioned {
-		c.JSON(http.StatusOK, gin.H{
-			"requires_setup": true,
-			"message":        "Domain not configured. Please run initial setup.",
-		})
-		return
-	}
-
 	var req models.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Invalid request format",
+		})
+		return
+	}
+
+	// Check domain status first
+	domain := services.NewDomainService()
+	status, _ := domain.GetDomainStatus()
+
+	// If no domain is provisioned, only allow local admin users to proceed to setup
+	if status == nil || !status.Provisioned {
+		// Try PAM authentication for local admin users only
+		if utils.AuthenticatePAM(req.Username, req.Password) {
+			isAdmin := utils.CheckLocalAdminStatus(req.Username)
+			if isAdmin {
+				// Local admin user - allow them to proceed to setup
+				loginResponse, err := h.authService.GenerateToken(req.Username, true, false)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"error": "Failed to generate token",
+					})
+					return
+				}
+				c.JSON(http.StatusOK, loginResponse)
+				return
+			}
+		}
+
+		// Not a local admin or authentication failed
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "System not configured. Only local administrators can perform initial setup.",
 		})
 		return
 	}

@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import api from '../lib/api'
 
 // Get version from package.json
-const VERSION = '0.1.58'
+const VERSION = '0.1.59'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -23,12 +23,12 @@ export default function LoginPage() {
       try {
         const response = await api.get('/domain/status')
         if (!response.data.provisioned) {
-          console.log('Domain not provisioned, redirecting to wizard')
-          navigate('/wizard')
+          console.log('Domain not provisioned, showing login for local admin setup')
+          // Don't redirect - show login page for local admin authentication
         }
       } catch (err) {
-        console.log('Failed to check domain status, assuming unprovisioned')
-        navigate('/wizard')
+        console.log('Failed to check domain status, showing login for local admin setup')
+        // Don't redirect - show login page for local admin authentication
       }
     }
     
@@ -51,17 +51,18 @@ export default function LoginPage() {
       })
 
       console.log('Login response:', response.data)
-      
-      // Check if setup is required
-      if (response.data.requires_setup) {
-        console.log('Domain setup required, redirecting to wizard')
-        navigate('/wizard')
-        return
-      }
 
       const { token, username: user, is_admin, is_domain_user } = response.data
       login(token, user, is_admin, is_domain_user)
-      navigate('/')
+      
+      // Check if we need to redirect to wizard (for unprovisioned systems)
+      if (!is_domain_user && is_admin) {
+        console.log('Local admin authenticated, redirecting to wizard')
+        navigate('/wizard')
+      } else {
+        console.log('Domain user authenticated, redirecting to dashboard')
+        navigate('/')
+      }
     } catch (err: any) {
       console.error('=== LOGIN FAILED ===')
       console.error('Full error:', err)

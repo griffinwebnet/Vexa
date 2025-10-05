@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useAuthStore } from '../stores/authStore'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -9,6 +10,7 @@ type SetupMode = 'new' | 'join' | 'migrate' | null
 
 export default function SetupWizard() {
   const queryClient = useQueryClient()
+  const { token, isAuthenticated } = useAuthStore()
   const [mode, setMode] = useState<SetupMode>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -74,11 +76,19 @@ export default function SetupWizard() {
       const domain = getDomainFromRealm(formData.realm)
       setDomainName(domain)
       
-      // Use the new streaming endpoint (no authentication required during setup)
+      // Check authentication
+      if (!isAuthenticated || !token) {
+        setError('Authentication required. Please log in again.')
+        setProvisioningState('error')
+        return
+      }
+      
+      // Use the new streaming endpoint (authentication required for setup)
       const response = await fetch('/api/v1/domain/provision-with-output', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           domain: domain,
@@ -150,9 +160,18 @@ export default function SetupWizard() {
                     return
                   }
                   
-                  // Update status for any meaningful content
+                  // Update status for meaningful content (filter out noise)
                   console.log('Updating status to:', content)
-                  setCurrentStatus(content)
+                  
+                  // Only update status for important messages, not every line
+                  if (content && content.length > 10 && 
+                      !content.includes('STDOUT:') && 
+                      !content.includes('Applied Domain Update')) {
+                    setCurrentStatus(content)
+                    console.log('Status update applied:', content)
+                  } else {
+                    console.log('Filtered out status update:', content)
+                  }
                   
                   // Check for completion messages
                   if (content.includes('Domain provisioning completed') || 
