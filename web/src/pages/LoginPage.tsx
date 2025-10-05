@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { Button } from '../components/ui/Button'
@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import api from '../lib/api'
 
 // Get version from package.json
-const VERSION = '0.1.55'
+const VERSION = '0.1.56'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -16,6 +16,24 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Check domain status on component mount
+  useEffect(() => {
+    async function checkDomainStatus() {
+      try {
+        const response = await api.get('/domain/status')
+        if (!response.data.provisioned) {
+          console.log('Domain not provisioned, redirecting to wizard')
+          navigate('/wizard')
+        }
+      } catch (err) {
+        console.log('Failed to check domain status, assuming unprovisioned')
+        navigate('/wizard')
+      }
+    }
+    
+    checkDomainStatus()
+  }, [navigate])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

@@ -24,15 +24,7 @@ func NewAuthHandler(devMode bool) *AuthHandler {
 
 // Login authenticates user against PAM or Active Directory
 func (h *AuthHandler) Login(c *gin.Context) {
-	var req models.LoginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid request format",
-		})
-		return
-	}
-
-	// Check domain status first
+	// Check domain status first - if no domain, bypass authentication entirely
 	domain := services.NewDomainService()
 	status, _ := domain.GetDomainStatus()
 
@@ -41,6 +33,14 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"requires_setup": true,
 			"message":        "Domain not configured. Please run initial setup.",
+		})
+		return
+	}
+
+	var req models.LoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid request format",
 		})
 		return
 	}
