@@ -30,15 +30,22 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
   const isAdmin = useAuthStore((state) => state.isAdmin)
+  const isDomainUser = useAuthStore((state) => state.isDomainUser)
+  const username = useAuthStore((state) => state.username)
+  
+  console.log('AdminRoute check:', { isAuthenticated, isAdmin, isDomainUser, username })
   
   if (!isAuthenticated) {
+    console.log('AdminRoute: Not authenticated, redirecting to login')
     return <Navigate to="/login" />
   }
   
   if (!isAdmin) {
+    console.log('AdminRoute: Not admin, redirecting to self-service')
     return <Navigate to="/self-service" />
   }
   
+  console.log('AdminRoute: Access granted to admin pages')
   return <>{children}</>
 }
 

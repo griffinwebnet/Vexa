@@ -35,6 +35,8 @@ func (s *AuthService) Authenticate(req models.LoginRequest) (*models.AuthResult,
 
 // GenerateToken generates a JWT token for the authenticated user
 func (s *AuthService) GenerateToken(username string, isAdmin bool, isDomainUser bool) (*models.LoginResponse, error) {
+	fmt.Printf("DEBUG: GenerateToken called for user: %s, isAdmin: %v, isDomainUser: %v\n", username, isAdmin, isDomainUser)
+
 	expiresAt := time.Now().Add(24 * time.Hour)
 
 	claims := jwt.MapClaims{
@@ -46,19 +48,25 @@ func (s *AuthService) GenerateToken(username string, isAdmin bool, isDomainUser 
 		"iat":            time.Now().Unix(),
 	}
 
+	fmt.Printf("DEBUG: JWT claims: %+v\n", claims)
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString([]byte(utils.GetJWTSecret()))
 	if err != nil {
+		fmt.Printf("DEBUG: Failed to sign JWT token: %v\n", err)
 		return nil, err
 	}
 
-	return &models.LoginResponse{
+	response := &models.LoginResponse{
 		Token:        tokenString,
 		ExpiresAt:    expiresAt,
 		Username:     username,
 		IsAdmin:      isAdmin,
 		IsDomainUser: isDomainUser,
-	}, nil
+	}
+
+	fmt.Printf("DEBUG: Generated login response: %+v\n", response)
+	return response, nil
 }
 
 // authenticateUser validates credentials against SAMBA domain first, then PAM fallback

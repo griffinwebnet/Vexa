@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -48,10 +49,13 @@ func AuthRequired() gin.HandlerFunc {
 
 		// Extract claims
 		if claims, ok := token.Claims.(jwt.MapClaims); ok {
+			fmt.Printf("DEBUG: JWT claims extracted: %+v\n", claims)
 			c.Set("username", claims["username"])
 			c.Set("user_id", claims["user_id"])
 			c.Set("is_admin", claims["is_admin"])
 			c.Set("is_domain_user", claims["is_domain_user"])
+			fmt.Printf("DEBUG: Set context - username: %v, is_admin: %v, is_domain_user: %v\n",
+				claims["username"], claims["is_admin"], claims["is_domain_user"])
 		}
 
 		c.Next()

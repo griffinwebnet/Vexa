@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import api from '../lib/api'
 
 // Get version from package.json
-const VERSION = '0.1.63'
+const VERSION = '0.1.64'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -53,7 +53,16 @@ export default function LoginPage() {
       console.log('Login response:', response.data)
 
       const { token, username: user, is_admin, is_domain_user } = response.data
+      console.log('Extracted values:', { user, is_admin, is_domain_user })
       login(token, user, is_admin, is_domain_user)
+      
+      // Debug: Check what was stored in auth store
+      console.log('Auth store after login:', {
+        isAuthenticated: true,
+        username: user,
+        isAdmin: is_admin,
+        isDomainUser: is_domain_user
+      })
 
       // Redirect logic based on user type and domain status
       if (!is_domain_user && is_admin) {
