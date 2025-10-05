@@ -37,7 +37,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	domain := services.NewDomainService()
 	status, _ := domain.GetDomainStatus()
 
-	// If no domain is provisioned, only allow local admin users to proceed to setup
+	// If no domain exists, only allow local admin users
 	if status == nil || !status.Provisioned {
 		// Try PAM authentication for local admin users only
 		if utils.AuthenticatePAM(req.Username, req.Password) {
@@ -63,7 +63,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// Authenticate user via standard flow (domain first, then PAM fallback)
+	// Domain exists - try domain authentication first, then PAM fallback
 	authResult, err := h.authService.Authenticate(req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -75,14 +75,6 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	if !authResult.Authenticated {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "Invalid username or password",
-		})
-		return
-	}
-
-	// Check if user has proper authorization
-	if !authResult.IsAdmin && !authResult.IsDomainUser {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "User account not authorized",
 		})
 		return
 	}

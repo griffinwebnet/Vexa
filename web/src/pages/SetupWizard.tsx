@@ -164,18 +164,18 @@ export default function SetupWizard() {
                   // Update status for meaningful content
                   console.log('Updating status to:', content)
                   
-                  // Show important messages and some progress indicators
-                  if (content && content.length > 3 && 
-                      !content.includes('STDOUT:') && 
-                      !content.includes('Applied Domain Update')) {
-                    setCurrentStatus(content)
-                    console.log('Status update applied:', content)
-                  } else if (content.includes('Applied Domain Update')) {
-                    // Show progress for domain updates
-                    setCurrentStatus('Applying domain updates...')
-                    console.log('Status update applied: Applying domain updates...')
-                  } else {
-                    console.log('Filtered out status update:', content)
+                  // Always update status for any non-empty content
+                  if (content && content.trim().length > 0) {
+                    // Clean up the content
+                    let cleanContent = content
+                    if (content.includes('STDOUT:')) {
+                      cleanContent = 'Processing domain configuration...'
+                    } else if (content.includes('Applied Domain Update')) {
+                      cleanContent = 'Applying domain updates...'
+                    }
+                    
+                    setCurrentStatus(cleanContent)
+                    console.log('Status update applied:', cleanContent)
                   }
                   
                   // Check for completion messages

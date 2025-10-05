@@ -18,46 +18,19 @@ import SelfService from './pages/SelfService'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
-  const token = useAuthStore((state) => state.token)
-  const [provisioned, setProvisioned] = useState<boolean | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    async function fetchStatus() {
-      try {
-        // Domain status is now public, no auth header needed
-        const resp = await fetch('/api/v1/domain/status')
-        if (!resp.ok) throw new Error('status failed')
-        const data = await resp.json()
-        console.log('Domain status check result:', data)
-        if (!cancelled) setProvisioned(!!data.provisioned)
-      } catch (err) {
-        console.log('Domain status check failed:', err)
-        if (!cancelled) setProvisioned(null)
-      }
-    }
-    if (isAuthenticated) {
-      fetchStatus()
-    }
-    return () => { cancelled = true }
-  }, [isAuthenticated, token])
+  const isDomainUser = useAuthStore((state) => state.isDomainUser)
 
   if (!isAuthenticated) {
     return <Navigate to="/login" />
   }
 
-  // Be strict: if unknown, treat as unprovisioned to avoid exposing UI
-  const effectiveProvisioned = provisioned === true
-
-  // If system is NOT provisioned: redirect any authenticated user to wizard
-  if (!effectiveProvisioned) {
-    if (window.location.pathname !== '/wizard') {
-      return <Navigate to="/wizard" />
-    }
+  // If it's a local admin user (not domain user), they should be in wizard
+  if (!isDomainUser && window.location.pathname !== '/wizard') {
+    return <Navigate to="/wizard" />
   }
 
-  // If provisioned: block access to wizard completely
-  if (effectiveProvisioned && window.location.pathname === '/wizard') {
+  // If it's a domain user and they're trying to access wizard, redirect to dashboard
+  if (isDomainUser && window.location.pathname === '/wizard') {
     return <Navigate to="/" />
   }
 
@@ -102,27 +75,17 @@ function DomainUserRoute({ children }: { children: React.ReactNode }) {
 }
 
 function SetupRoute({ children }: { children: React.ReactNode }) {
-  const [provisioned, setProvisioned] = useState<boolean | null>(null)
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+  const isDomainUser = useAuthStore((state) => state.isDomainUser)
 
-  useEffect(() => {
-    let cancelled = false
-    async function fetchStatus() {
-      try {
-        const resp = await fetch('/api/v1/domain/status')
-        if (!resp.ok) throw new Error('status failed')
-        const data = await resp.json()
-        if (!cancelled) setProvisioned(!!data.provisioned)
-      } catch {
-        if (!cancelled) setProvisioned(null)
-      }
-    }
-    fetchStatus()
-    return () => { cancelled = true }
-  }, [])
-
-  // If domain is already provisioned, redirect to login
-  if (provisioned === true) {
+  // If not authenticated, redirect to login
+  if (!isAuthenticated) {
     return <Navigate to="/login" />
+  }
+
+  // If it's a domain user, they shouldn't access wizard
+  if (isDomainUser) {
+    return <Navigate to="/" />
   }
 
   return <>{children}</>

@@ -26,10 +26,32 @@ func NewDomainService() *DomainService {
 
 // GetDomainStatus returns the current status of the domain controller
 func (s *DomainService) GetDomainStatus() (*models.DomainStatusResponse, error) {
+	// Check if domain is provisioned using multiple methods
+	provisioned := false
 
-	// Check if domain is provisioned
+	// Method 1: Try samba-tool domain info
 	_, err := s.sambaTool.DomainInfo("127.0.0.1")
-	provisioned := err == nil
+	if err == nil {
+		provisioned = true
+	}
+
+	// Method 2: Check if Samba configuration exists
+	if !provisioned {
+		// Check if /etc/samba/smb.conf exists and has domain configuration
+		if s.system.FileExists("/etc/samba/smb.conf") {
+			// Try to parse the config for domain settings
+			if s.hasDomainConfiguration() {
+				provisioned = true
+			}
+		}
+	}
+
+	// Method 3: Check if Samba databases exist
+	if !provisioned {
+		if s.system.FileExists("/var/lib/samba/private/sam.ldb") {
+			provisioned = true
+		}
+	}
 
 	// Check if DC is running
 	dcReady, _ := s.system.ServiceStatus("samba-ad-dc")
@@ -60,6 +82,18 @@ func (s *DomainService) GetDomainStatus() (*models.DomainStatusResponse, error) 
 	}
 
 	return response, nil
+}
+
+// hasDomainConfiguration checks if the Samba config has domain controller settings
+func (s *DomainService) hasDomainConfiguration() bool {
+	cmd := exec.Command("testparm", "-s", "--parameter-name", "server role")
+	output, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+
+	role := strings.TrimSpace(string(output))
+	return strings.Contains(strings.ToLower(role), "active directory domain controller")
 }
 
 // getDomainInfo tries multiple methods to get domain and realm information

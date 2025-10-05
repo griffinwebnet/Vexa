@@ -59,3 +59,9 @@ func (s *System) RunCommand(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	return cmd.Run()
 }
+
+// FileExists checks if a file exists on the filesystem
+func (s *System) FileExists(path string) bool {
+	cmd := exec.Command("test", "-f", path)
+	return cmd.Run() == nil
+}
