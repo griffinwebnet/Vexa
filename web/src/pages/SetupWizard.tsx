@@ -4,13 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Server, GitMerge, Plus, Loader2, CheckCircle, AlertCircle } from 'lucide-react'
-import { useAuthStore } from '../stores/authStore'
 
 type SetupMode = 'new' | 'join' | 'migrate' | null
 
 export default function SetupWizard() {
   const queryClient = useQueryClient()
-  const { token, isAuthenticated } = useAuthStore()
   const [mode, setMode] = useState<SetupMode>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -76,19 +74,11 @@ export default function SetupWizard() {
       const domain = getDomainFromRealm(formData.realm)
       setDomainName(domain)
       
-      // Check authentication
-      if (!isAuthenticated || !token) {
-        setError('Authentication required. Please log in again.')
-        setProvisioningState('error')
-        return
-      }
-      
-      // Use the new streaming endpoint
+      // Use the new streaming endpoint (no authentication required during setup)
       const response = await fetch('/api/v1/domain/provision-with-output', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           domain: domain,
@@ -100,18 +90,36 @@ export default function SetupWizard() {
       console.log('Response status:', response.status, response.statusText)
       
       if (!response.ok) {
-        if (response.status === 401) {
-          useAuthStore.getState().logout()
-          setError('Authentication expired. Please refresh the page and log in again.')
-          setProvisioningState('error')
-          return
-        }
-        
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
 
       const reader = response.body?.getReader()
       const decoder = new TextDecoder()
+
+      // Add a fallback timeout to check completion status
+      const fallbackTimeout = setTimeout(async () => {
+        console.log('Fallback timeout reached, checking domain status...')
+        try {
+          const statusResponse = await fetch('/api/v1/domain/status')
+          const statusData = await statusResponse.json()
+          if (statusData.provisioned) {
+            console.log('Domain is provisioned, setting success state')
+            setCurrentStatus('Domain provisioning completed successfully!')
+            setProvisioningState('success')
+            setTimeout(() => {
+              localStorage.setItem('vexa-setup-complete', 'true')
+              localStorage.setItem('vexa-domain-info', JSON.stringify({
+                domain: domainName,
+                realm: formData.realm
+              }))
+              queryClient.invalidateQueries({ queryKey: ['domainStatus'] })
+              window.location.href = '/'
+            }, 2000)
+          }
+        } catch (err) {
+          console.log('Fallback status check failed:', err)
+        }
+      }, 30000) // 30 second fallback
 
       if (reader) {
         while (true) {
@@ -133,81 +141,57 @@ export default function SetupWizard() {
                 
                 if (data.type === 'output') {
                   const content = data.content
-                  console.log('SSE Output:', content) // Console logging for debugging
+                  console.log('SSE Output:', content)
                   
-                  // Show important status messages in UI
+                  // Handle errors
                   if (content.startsWith('ERROR:')) {
-                    if (isMounted.current) {
-                      setError(content.replace('ERROR: ', ''))
-                      setProvisioningState('error')
-                    }
+                    setError(content.replace('ERROR: ', ''))
+                    setProvisioningState('error')
                     return
-                  } else if (
-                    // Show key status messages - be more specific with exact matches
-                    content === 'Starting domain provisioning...' ||
-                    content === 'Checking if samba-tool is available...' ||
-                    content === 'samba-tool is available' ||
-                    content === 'Cleaning up existing Samba configuration...' ||
-                    content === 'Stopping conflicting services...' ||
-                    content === 'Generating admin password...' ||
-                    content === 'Starting domain provision command...' ||
-                    content === 'Domain provisioning completed successfully' ||
-                    content === 'Creating default groups...' ||
-                    content === 'Starting Samba AD DC service...' ||
-                    content === 'Samba AD DC service started successfully' ||
-                    content === 'Domain provisioning completed!' ||
-                    // Also check for completion messages with different patterns
-                    content.includes('Domain provisioning completed') ||
-                    content.includes('Samba AD DC service started successfully')
-                  ) {
-                    console.log('Updating status to:', content)
-                    if (isMounted.current) {
-                      setCurrentStatus(content)
-                    }
+                  }
+                  
+                  // Update status for any meaningful content
+                  console.log('Updating status to:', content)
+                  setCurrentStatus(content)
+                  
+                  // Check for completion messages
+                  if (content.includes('Domain provisioning completed') || 
+                      content.includes('Samba AD DC service started successfully') ||
+                      content.includes('provisioning completed successfully')) {
+                    console.log('FORCING SUCCESS STATE due to completion message:', content)
+                    clearTimeout(fallbackTimeout)
+                    setProvisioningState('success')
                     
-                    // Force success if we see completion message
-                    if (content === 'Domain provisioning completed!' || 
-                        content.includes('Domain provisioning completed') ||
-                        content === 'Samba AD DC service started successfully') {
-                      console.log('FORCING SUCCESS STATE due to completion message:', content)
-                      if (isMounted.current) {
-                        setProvisioningState('success')
-                      }
-                      
-                      // Auto-redirect after 3 seconds since complete event isn't working
-                      setTimeout(() => {
-                        console.log('Auto-redirecting to dashboard from completion message')
-                        localStorage.setItem('vexa-setup-complete', 'true')
-                        localStorage.setItem('vexa-domain-info', JSON.stringify({
-                          domain: domainName,
-                          realm: formData.realm
-                        }))
-                        queryClient.invalidateQueries({ queryKey: ['domainStatus'] })
-                        window.location.href = '/'
-                      }, 3000)
-                    }
+                    // Auto-redirect after 2 seconds
+                    setTimeout(() => {
+                      console.log('Auto-redirecting to dashboard from completion message')
+                      localStorage.setItem('vexa-setup-complete', 'true')
+                      localStorage.setItem('vexa-domain-info', JSON.stringify({
+                        domain: domainName,
+                        realm: formData.realm
+                      }))
+                      queryClient.invalidateQueries({ queryKey: ['domainStatus'] })
+                      window.location.href = '/'
+                    }, 2000)
                   }
                 } else if (data.type === 'complete') {
-                  console.log('=== COMPLETE EVENT RECEIVED ===') // Console logging for debugging
+                  console.log('=== COMPLETE EVENT RECEIVED ===')
                   console.log('Complete event data:', data)
-                  console.log('Current provisioning state before:', provisioningState)
-                  console.log('Setting provisioning state to success')
+                  clearTimeout(fallbackTimeout)
                   setCurrentStatus('Domain provisioning completed successfully!')
                   setProvisioningState('success')
-                  console.log('Provisioning state set to success')
                   
-                  // Auto-redirect after 3 seconds
+                  // Auto-redirect after 2 seconds
                   setTimeout(() => {
                     console.log('Auto-redirecting to dashboard')
                     localStorage.setItem('vexa-setup-complete', 'true')
-                    // Store domain info for immediate display
                     localStorage.setItem('vexa-domain-info', JSON.stringify({
                       domain: domainName,
                       realm: formData.realm
                     }))
                     queryClient.invalidateQueries({ queryKey: ['domainStatus'] })
                     window.location.href = '/'
-                  }, 3000)
+                  }, 2000)
                 } else {
                   console.log('Unknown event type:', data.type, 'Data:', data)
                 }

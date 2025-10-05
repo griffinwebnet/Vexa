@@ -13,7 +13,7 @@ import (
 // Global dev mode flag
 var DevMode bool
 
-const Version = "0.1.56"
+const Version = "0.1.58"
 
 func main() {
 	// Parse command line flags
@@ -61,6 +61,11 @@ func main() {
 		})
 		public.GET("/updates/check", handlers.CheckForUpdates)
 		public.POST("/updates/upgrade", handlers.PerformUpgrade)
+
+		// Domain setup endpoints (no auth required for initial setup)
+		public.POST("/domain/provision", domainHandler.ProvisionDomain)
+		public.POST("/domain/provision-with-output", domainHandler.ProvisionDomainWithOutput)
+		public.GET("/domain/status", domainHandler.DomainStatus)
 	}
 
 	// Protected routes (require authentication)
@@ -68,10 +73,7 @@ func main() {
 	protected.Use(middleware.AuthRequired())
 	protected.Use(middleware.ProvisioningGate())
 	{
-		// Domain management
-		protected.POST("/domain/provision", domainHandler.ProvisionDomain)
-		protected.POST("/domain/provision-with-output", domainHandler.ProvisionDomainWithOutput)
-		protected.GET("/domain/status", domainHandler.DomainStatus)
+		// Domain management (after initial setup)
 		protected.GET("/domain/info", domainHandler.GetDomainInfo)
 		protected.PUT("/domain/configure", domainHandler.ConfigureDomain)
 
