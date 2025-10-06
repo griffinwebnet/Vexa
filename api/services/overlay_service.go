@@ -68,6 +68,11 @@ func (s *OverlayService) SetupOverlay(fqdn string) error {
 		return fmt.Errorf("failed to join mesh: %v", err)
 	}
 
+	// Fix DNS forwarder configuration to prevent DNS loops
+	if err := s.fixDNSForwarder(); err != nil {
+		return fmt.Errorf("failed to fix DNS forwarder: %v", err)
+	}
+
 	return nil
 }
 
@@ -191,6 +196,9 @@ func (s *OverlayService) configureHeadscale(fqdn string) error {
 	// Extract domain from FQDN for mesh domain (first part)
 	domain := strings.Split(fqdn, ".")[0]
 
+	// Get system DNS servers
+	systemDNS := s.getSystemDNSServers()
+
 	// Create config from template
 	tmpl := template.Must(template.New("config").Parse(`---
 # Vexa Mesh Configuration
@@ -249,9 +257,12 @@ dns:
   override_local_dns: true
   nameservers:
     global:
-      - 100.64.0.1
+      {{ range .SystemDNS }}- {{ . }}
+      {{ end }}
     split:
       {{ .ADDomain }}:
+        - 100.64.0.1
+      {{ .MeshDomain }}.mesh:
         - 100.64.0.1
   search_domains:
     - {{ .ADDomain }}
@@ -283,11 +294,13 @@ randomize_client_port: false`))
 	data := struct {
 		FQDN       string
 		Domain     string
+		SystemDNS  []string
 		ADDomain   string
 		MeshDomain string
 	}{
 		FQDN:       fqdn,
 		Domain:     domain,
+		SystemDNS:  systemDNS,
 		ADDomain:   adDomain,
 		MeshDomain: meshDomain,
 	}
@@ -761,6 +774,62 @@ func (s *OverlayService) GetOverlayStatus() (map[string]interface{}, error) {
 		"mesh_domain": "mesh",
 		"server_ip":   "127.0.0.1", // Default server IP
 	}, nil
+}
+
+// fixDNSForwarder configures Samba DNS to forward external queries to proper DNS servers
+func (s *OverlayService) fixDNSForwarder() error {
+	// Get system DNS servers
+	systemDNS := s.getSystemDNSServers()
+	if len(systemDNS) == 0 {
+		// Fallback to public DNS servers
+		systemDNS = []string{"8.8.8.8", "1.1.1.1"}
+	}
+
+	// Configure Samba DNS forwarder using samba-tool
+	for _, dnsServer := range systemDNS {
+		cmd := exec.Command("samba-tool", "dns", "add", "127.0.0.1", ".", "NS", "forwarder", dnsServer)
+		if err := cmd.Run(); err != nil {
+			// Try alternative method
+			cmd = exec.Command("samba-tool", "domain", "settings", "set", "dns", "forwarder", dnsServer)
+			if err := cmd.Run(); err != nil {
+				fmt.Printf("WARNING: Failed to set DNS forwarder %s: %v\n", dnsServer, err)
+			}
+		}
+	}
+
+	// Restart Samba service to apply DNS changes
+	cmd := exec.Command("systemctl", "restart", "samba-ad-dc")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to restart samba-ad-dc: %v", err)
+	}
+
+	return nil
+}
+
+// getSystemDNSServers gets the system's current DNS servers
+func (s *OverlayService) getSystemDNSServers() []string {
+	var dnsServers []string
+
+	// Try to get DNS servers from /etc/resolv.conf
+	if content, err := os.ReadFile("/etc/resolv.conf"); err == nil {
+		lines := strings.Split(string(content), "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "nameserver ") {
+				parts := strings.Fields(line)
+				if len(parts) >= 2 {
+					dnsServers = append(dnsServers, parts[1])
+				}
+			}
+		}
+	}
+
+	// If no DNS servers found, use fallback
+	if len(dnsServers) == 0 {
+		dnsServers = []string{"8.8.8.8", "1.1.1.1"}
+	}
+
+	return dnsServers
 }
 
 // TestFQDNWithListener tests FQDN accessibility by setting up a temporary listener
