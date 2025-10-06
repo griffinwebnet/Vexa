@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
-import { Network, Globe, Shield, Info, Download, AlertTriangle, CheckCircle, ExternalLink, Loader2 } from 'lucide-react'
+import { Network, Globe, Shield, Info, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react'
 import api from '../lib/api'
 
 export default function OverlayNetworking() {

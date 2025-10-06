@@ -1,13 +1,12 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
-import { Download, AlertTriangle, CheckCircle, Network } from 'lucide-react'
+import { Download, Shield, Info, Network } from 'lucide-react'
 import api from '../lib/api'
 import type { UpdateInfo } from '../types/updates'
 
 export default function Settings() {
-  const queryClient = useQueryClient()
 
 
   const { data: updateInfo, isLoading: isUpdateLoading } = useQuery<UpdateInfo>({
