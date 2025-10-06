@@ -629,7 +629,8 @@ func (s *OverlayService) TestFQDNWithListener(fqdn string) (map[string]interface
 	fmt.Printf("DEBUG: Starting temporary listener on port 50443\n")
 
 	// Create a simple HTTP server that responds with a test message
-	listener, err := net.Listen("tcp", ":50443")
+	// Explicitly bind to all interfaces (0.0.0.0) to ensure it's accessible from other devices
+	listener, err := net.Listen("tcp", "0.0.0.0:50443")
 	if err != nil {
 		fmt.Printf("DEBUG: Failed to bind to port 50443: %v\n", err)
 
@@ -724,6 +725,27 @@ func (s *OverlayService) TestFQDNWithListener(fqdn string) (map[string]interface
 	}
 
 	fmt.Printf("DEBUG: Local test result: code=%s\n", localCode)
+
+	// Also test using the server's LAN IP address
+	// Get the server's LAN IP address
+	lanIPCmd := exec.Command("hostname", "-I")
+	lanIPOutput, _ := lanIPCmd.Output()
+	lanIP := strings.TrimSpace(strings.Split(string(lanIPOutput), " ")[0])
+
+	if lanIP != "" {
+		fmt.Printf("DEBUG: Testing with LAN IP %s on port %d\n", lanIP, testPort)
+		lanTestCmd := exec.Command("curl", "-v", "--connect-timeout", "5", fmt.Sprintf("http://%s:%d", lanIP, testPort))
+		lanOutput, lanErr := lanTestCmd.CombinedOutput()
+
+		fmt.Printf("DEBUG: LAN IP curl output: %s\n", string(lanOutput))
+		fmt.Printf("DEBUG: LAN IP curl error: %v\n", lanErr)
+
+		if strings.Contains(string(lanOutput), "HTTP/1.1 200") || strings.Contains(string(lanOutput), "HTTP/2 200") {
+			fmt.Printf("DEBUG: LAN IP test successful!\n")
+		} else {
+			fmt.Printf("DEBUG: LAN IP test failed. This may indicate a firewall or binding issue.\n")
+		}
+	}
 
 	// Now test external FQDN accessibility
 	fmt.Printf("DEBUG: Testing external FQDN accessibility via port 50443\n")
