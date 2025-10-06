@@ -42,6 +42,16 @@ func (s *OverlayService) SetupOverlay(fqdn string) error {
 		return fmt.Errorf("failed to configure headscale: %v", err)
 	}
 
+	// Calculate mesh domain for join operation (same logic as configureHeadscale)
+	domainService := NewDomainService()
+	domainStatus, _ := domainService.GetDomainStatus()
+	meshDomain := ""
+	if domainStatus != nil && domainStatus.Domain != "" && domainStatus.Domain != "PROVISIONED" {
+		meshDomain = strings.Split(domainStatus.Domain, ".")[0]
+	} else {
+		meshDomain = strings.Split(fqdn, ".")[0]
+	}
+
 	// Start Headscale
 	if err := s.startHeadscale(); err != nil {
 		return fmt.Errorf("failed to start headscale: %v", err)
@@ -53,7 +63,7 @@ func (s *OverlayService) SetupOverlay(fqdn string) error {
 	}
 
 	// Join this server to the mesh via localhost (not dependent on external connectivity)
-	if err := s.joinMeshLocal(fqdn); err != nil {
+	if err := s.joinMeshLocal(fqdn, meshDomain); err != nil {
 		return fmt.Errorf("failed to join mesh: %v", err)
 	}
 
@@ -143,6 +153,28 @@ func (s *OverlayService) installHeadscale() error {
 
 // configureHeadscale sets up Headscale configuration
 func (s *OverlayService) configureHeadscale(fqdn string) error {
+	// Get the actual AD domain from domain service
+	domainService := NewDomainService()
+	domainStatus, err := domainService.GetDomainStatus()
+	if err != nil {
+		return fmt.Errorf("failed to get domain status: %v", err)
+	}
+
+	// Get the actual AD domain and extract the base domain for mesh
+	adDomain := ""
+	meshDomain := ""
+
+	if domainStatus != nil && domainStatus.Domain != "" && domainStatus.Domain != "PROVISIONED" {
+		adDomain = domainStatus.Domain
+		// Use first part of AD domain for mesh domain
+		meshDomain = strings.Split(adDomain, ".")[0]
+	} else {
+		// Fallback to first part of FQDN if no AD domain found
+		meshDomain = strings.Split(fqdn, ".")[0]
+		adDomain = meshDomain // Use same as fallback
+	}
+
+	fmt.Printf("DEBUG: Using AD domain: %s, Mesh domain: %s, FQDN: %s\n", adDomain, meshDomain, fqdn)
 	// Create config and data directories
 	if err := os.MkdirAll("/etc/headscale", 0755); err != nil {
 		return err
@@ -154,11 +186,11 @@ func (s *OverlayService) configureHeadscale(fqdn string) error {
 		return err
 	}
 
-	// Extract domain from FQDN
+	// Extract domain from FQDN for mesh domain (first part)
 	domain := strings.Split(fqdn, ".")[0]
 
 	// Create config from template
-	// Use port 50443 for all Headscale communication (no web UI exposure)
+	// Use port 50443 for all Headscale communication
 	tmpl := template.Must(template.New("config").Parse(`---
 # Vexa Mesh Configuration
 server_url: http://{{ .FQDN }}:50443
@@ -213,26 +245,26 @@ allow_netbios_broadcast: true
 
 dns:
   magic_dns: true
-  base_domain: {{ .Domain }}.mesh
+  base_domain: {{ .MeshDomain }}.mesh
   override_local_dns: true
   nameservers:
     global:
       - 100.64.0.1
     split:
-      {{ .Domain }}.local:
+      {{ .ADDomain }}:
         - 100.64.0.1
   search_domains:
-    - {{ .Domain }}.local
-    - {{ .Domain }}.mesh
+    - {{ .ADDomain }}
+    - {{ .MeshDomain }}.mesh
     - {{ .Domain }}
   extra_records:
-    - name: "{{ .Domain }}.local"
+    - name: "{{ .MeshDomain }}.mesh"
       type: "A"
       value: "100.64.0.1"
-    - name: "{{ .Domain }}"
+    - name: "{{ .ADDomain }}"
       type: "A"
       value: "100.64.0.1"
-    - name: "dc-01.{{ .Domain }}.local"
+    - name: "dc-01.{{ .ADDomain }}"
       type: "A"
       value: "100.64.0.1"
 
@@ -249,11 +281,15 @@ randomize_client_port: false`))
 	defer f.Close()
 
 	data := struct {
-		FQDN   string
-		Domain string
+		FQDN       string
+		Domain     string
+		ADDomain   string
+		MeshDomain string
 	}{
-		FQDN:   fqdn,
-		Domain: domain,
+		FQDN:       fqdn,
+		Domain:     domain,
+		ADDomain:   adDomain,
+		MeshDomain: meshDomain,
 	}
 
 	if err := tmpl.Execute(f, data); err != nil {
@@ -376,13 +412,29 @@ func (s *OverlayService) joinMesh() error {
 }
 
 // joinMeshLocal joins the mesh using localhost connection (not dependent on external connectivity)
-func (s *OverlayService) joinMeshLocal(fqdn string) error {
+func (s *OverlayService) joinMeshLocal(fqdn string, meshDomain string) error {
 	fmt.Printf("DEBUG: Joining mesh via localhost connection\n")
 
 	// First ensure headscale service is running
 	fmt.Printf("DEBUG: Ensuring headscale service is running\n")
-	exec.Command("systemctl", "start", "headscale").Run()
-	time.Sleep(2 * time.Second) // Give it time to start
+	startCmd := exec.Command("systemctl", "start", "headscale")
+	startOutput, startErr := startCmd.CombinedOutput()
+	if startErr != nil {
+		fmt.Printf("DEBUG: Headscale start output: %s\n", string(startOutput))
+		fmt.Printf("DEBUG: Headscale start error: %v\n", startErr)
+	}
+
+	// Wait longer for headscale to fully start
+	fmt.Printf("DEBUG: Waiting for headscale to fully start...\n")
+	time.Sleep(5 * time.Second)
+
+	// Check if headscale is actually running
+	statusCmd := exec.Command("systemctl", "is-active", "headscale")
+	statusOutput, statusErr := statusCmd.Output()
+	fmt.Printf("DEBUG: Headscale status: %s\n", string(statusOutput))
+	if statusErr != nil {
+		fmt.Printf("DEBUG: Headscale status check error: %v\n", statusErr)
+	}
 
 	// Create a user called 'infrastructure'
 	fmt.Printf("DEBUG: Creating infrastructure user\n")
