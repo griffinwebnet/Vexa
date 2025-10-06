@@ -426,7 +426,19 @@ func (s *OverlayService) joinMeshLocal(fqdn string, meshDomain string) error {
 
 	// Wait longer for headscale to fully start
 	fmt.Printf("DEBUG: Waiting for headscale to fully start...\n")
-	time.Sleep(5 * time.Second)
+	time.Sleep(10 * time.Second) // Increase wait time
+
+	// Add health check loop
+	for i := 0; i < 10; i++ {
+		statusCmd := exec.Command("systemctl", "is-active", "headscale")
+		statusOutput, statusErr := statusCmd.Output()
+		if statusErr == nil && strings.TrimSpace(string(statusOutput)) == "active" {
+			fmt.Printf("DEBUG: Headscale is active after %d attempts\n", i+1)
+			break
+		}
+		fmt.Printf("DEBUG: Headscale not ready, attempt %d/10\n", i+1)
+		time.Sleep(2 * time.Second)
+	}
 
 	// Check if headscale is actually running
 	statusCmd := exec.Command("systemctl", "is-active", "headscale")
@@ -449,8 +461,18 @@ func (s *OverlayService) joinMeshLocal(fqdn string, meshDomain string) error {
 	// Generate a pre-auth key for this server
 	fmt.Printf("DEBUG: Creating pre-auth key for infrastructure user\n")
 	cmd := exec.Command("headscale", "preauthkeys", "create", "--reusable", "--expiration", "131400h", "-u", "infrastructure")
+	cmd.Env = append(cmd.Env, "HEADSCALE_CONFIG=/etc/headscale/config.yaml") // Explicitly set config path
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		// Add more detailed error information
+		fmt.Printf("DEBUG: Pre-auth key creation failed: %v\n", err)
+		fmt.Printf("DEBUG: Command output: %s\n", string(output))
+
+		// Check if Headscale is actually running
+		statusCmd := exec.Command("systemctl", "status", "headscale")
+		statusOutput, _ := statusCmd.CombinedOutput()
+		fmt.Printf("DEBUG: Headscale service status: %s\n", string(statusOutput))
+
 		return fmt.Errorf("failed to create pre-auth key: %v, output: %s", err, string(output))
 	}
 	authKey := strings.TrimSpace(string(output))
