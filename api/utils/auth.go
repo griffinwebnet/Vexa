@@ -114,6 +114,8 @@ func getDomainName() string {
 
 // CheckDomainAdminStatus checks if a user is in admin groups (Domain Admins or Administrators)
 func CheckDomainAdminStatus(username string) bool {
+	fmt.Printf("DEBUG: CheckDomainAdminStatus called for user: %s\n", username)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -121,19 +123,26 @@ func CheckDomainAdminStatus(username string) bool {
 	adminGroups := []string{"Domain Admins", "Administrators"}
 
 	for _, group := range adminGroups {
+		fmt.Printf("DEBUG: Checking group: %s\n", group)
+
 		// Method 1: Try using samba-tool with explicit path and environment
 		cmd := exec.CommandContext(ctx, "/usr/bin/samba-tool", "group", "listmembers", group)
 		cmd.Env = append(cmd.Env, "PATH=/usr/bin:/bin:/usr/sbin:/sbin")
 		output, err := cmd.Output()
 
 		if err == nil && len(output) > 0 {
+			fmt.Printf("DEBUG: samba-tool output for %s: %s\n", group, string(output))
 			members := strings.Split(string(output), "\n")
 			for _, member := range members {
 				member = strings.TrimSpace(member)
+				fmt.Printf("DEBUG: Checking member '%s' against username '%s'\n", member, username)
 				if member == username {
+					fmt.Printf("DEBUG: FOUND USER %s in group %s via samba-tool\n", username, group)
 					return true
 				}
 			}
+		} else {
+			fmt.Printf("DEBUG: samba-tool failed for %s: %v\n", group, err)
 		}
 
 		// Method 2: Try using net command as fallback
@@ -141,13 +150,18 @@ func CheckDomainAdminStatus(username string) bool {
 		output2, err2 := cmd2.Output()
 
 		if err2 == nil && len(output2) > 0 {
+			fmt.Printf("DEBUG: net output for %s: %s\n", group, string(output2))
 			members := strings.Split(string(output2), "\n")
 			for _, member := range members {
 				member = strings.TrimSpace(member)
+				fmt.Printf("DEBUG: Checking member '%s' against username '%s'\n", member, username)
 				if member == username {
+					fmt.Printf("DEBUG: FOUND USER %s in group %s via net command\n", username, group)
 					return true
 				}
 			}
+		} else {
+			fmt.Printf("DEBUG: net command failed for %s: %v\n", group, err2)
 		}
 
 		// Method 3: Try using wbinfo as last resort
@@ -155,16 +169,21 @@ func CheckDomainAdminStatus(username string) bool {
 		output3, err3 := cmd3.Output()
 
 		if err3 == nil && len(output3) > 0 {
+			fmt.Printf("DEBUG: wbinfo output for %s: %s\n", group, string(output3))
 			// wbinfo -g shows group members in a different format
 			lines := strings.Split(string(output3), "\n")
 			for _, line := range lines {
 				if strings.Contains(line, username) {
+					fmt.Printf("DEBUG: FOUND USER %s in group %s via wbinfo\n", username, group)
 					return true
 				}
 			}
+		} else {
+			fmt.Printf("DEBUG: wbinfo failed for %s: %v\n", group, err3)
 		}
 	}
 
+	fmt.Printf("DEBUG: User %s is NOT in any admin groups\n", username)
 	return false
 }
 
