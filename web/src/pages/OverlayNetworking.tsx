@@ -44,6 +44,7 @@ export default function OverlayNetworking() {
     },
     onSuccess: (data) => {
       setFqdnTestResult(data)
+      setTestingFqdn(false)
     },
     onError: (error: any) => {
       setFqdnTestResult({
@@ -52,6 +53,7 @@ export default function OverlayNetworking() {
         message: error.response?.data?.error || 'Failed to test FQDN',
         can_proceed: false
       })
+      setTestingFqdn(false)
     },
   })
 
