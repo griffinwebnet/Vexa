@@ -308,6 +308,12 @@ func (s *OverlayService) startHeadscale() error {
 
 	fmt.Printf("DEBUG: Found headscale binary at: %s\n", headscalePath)
 
+	// Kill any processes using port 50443 (including test listeners)
+	fmt.Printf("DEBUG: Cleaning up any processes using port 50443\n")
+	exec.Command("pkill", "-f", "50443").Run()
+	exec.Command("pkill", "-f", "headscale").Run()
+	time.Sleep(2 * time.Second)
+
 	// Initialize the database first
 	fmt.Printf("DEBUG: Initializing Headscale database\n")
 	initCmd := exec.Command(headscalePath, "migrate", "-c", "/etc/headscale/config.yaml")
