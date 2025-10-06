@@ -13,7 +13,7 @@ import (
 // Global dev mode flag
 var DevMode bool
 
-const Version = "0.1.68"
+const Version = "0.2.70"
 
 func main() {
 	// Parse command line flags
@@ -133,6 +133,7 @@ func main() {
 		// Overlay Networking (Headscale)
 		protected.GET("/system/overlay-status", overlayHandler.GetOverlayStatus)
 		protected.POST("/system/setup-overlay", overlayHandler.SetupOverlay)
+		protected.POST("/system/test-fqdn", overlayHandler.TestFQDN)
 	}
 
 	// Start server

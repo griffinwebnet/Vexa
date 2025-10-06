@@ -57,6 +57,30 @@ func (h *OverlayHandler) GetOverlayStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, status)
 }
 
+// TestFQDN tests if an FQDN is publicly accessible
+func (h *OverlayHandler) TestFQDN(c *gin.Context) {
+	var req struct {
+		FQDN string `json:"fqdn" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid request format",
+		})
+		return
+	}
+
+	result, err := h.overlayService.TestFQDNAccessibility(req.FQDN)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
 // AddMachine generates scripts for joining a new machine
 func (h *OverlayHandler) AddMachine(c *gin.Context) {
 	var req struct {

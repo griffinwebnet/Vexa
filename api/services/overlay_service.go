@@ -57,15 +57,21 @@ func (s *OverlayService) SetupOverlay(fqdn string) error {
 	return nil
 }
 
-// installHeadscale installs Headscale from package or binary
+// installHeadscale installs Headscale using the recommended .deb package
 func (s *OverlayService) installHeadscale() error {
-	// Check if already installed
+	// Check if already installed and working
 	if _, err := exec.LookPath("headscale"); err == nil {
-		return nil
+		// Test if the binary actually works
+		if testCmd := exec.Command("headscale", "--help"); testCmd.Run() == nil {
+			return nil
+		}
+		// If it exists but doesn't work, remove it and reinstall
+		fmt.Printf("DEBUG: Removing corrupted headscale installation\n")
+		exec.Command("dpkg", "--remove", "headscale").Run()
+		exec.Command("apt", "autoremove", "-y").Run()
 	}
 
-	// Download latest Headscale binary
-	// Detect architecture and download appropriate binary
+	// Detect architecture
 	arch := "amd64"
 	if unameM, err := exec.Command("uname", "-m").Output(); err == nil {
 		archStr := strings.TrimSpace(string(unameM))
@@ -81,17 +87,65 @@ func (s *OverlayService) installHeadscale() error {
 
 	fmt.Printf("DEBUG: Detected architecture: %s\n", arch)
 
-	cmd := exec.Command("curl", "-L", "-o", "/usr/local/bin/headscale",
-		fmt.Sprintf("https://github.com/juanfont/headscale/releases/latest/download/headscale_linux_%s", arch))
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to download headscale: %v", err)
+	// Get latest version from GitHub API
+	fmt.Printf("DEBUG: Getting latest headscale version\n")
+	versionCmd := exec.Command("curl", "-s", "https://api.github.com/repos/juanfont/headscale/releases/latest")
+	versionOutput, err := versionCmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to get latest version: %v", err)
 	}
 
-	// Make executable
-	if err := os.Chmod("/usr/local/bin/headscale", 0755); err != nil {
-		return fmt.Errorf("failed to make headscale executable: %v", err)
+	// Parse version from JSON (simple approach)
+	versionOutputStr := string(versionOutput)
+	versionStart := strings.Index(versionOutputStr, `"tag_name":"v`)
+	if versionStart == -1 {
+		return fmt.Errorf("could not parse version from GitHub API response")
+	}
+	versionStart += len(`"tag_name":"v`)
+	versionEnd := strings.Index(versionOutputStr[versionStart:], `"`)
+	if versionEnd == -1 {
+		return fmt.Errorf("could not parse version from GitHub API response")
+	}
+	version := versionOutputStr[versionStart : versionStart+versionEnd]
+
+	fmt.Printf("DEBUG: Latest headscale version: %s\n", version)
+
+	// Download .deb package
+	debURL := fmt.Sprintf("https://github.com/juanfont/headscale/releases/download/v%s/headscale_%s_linux_%s.deb", version, version, arch)
+	fmt.Printf("DEBUG: Downloading headscale .deb from: %s\n", debURL)
+
+	downloadCmd := exec.Command("wget", "--output-document=headscale.deb", debURL)
+	downloadOutput, err := downloadCmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("DEBUG: Download failed: %v, output: %s\n", err, string(downloadOutput))
+		return fmt.Errorf("failed to download headscale .deb: %v", err)
 	}
 
+	// Install the .deb package
+	fmt.Printf("DEBUG: Installing headscale .deb package\n")
+	installCmd := exec.Command("dpkg", "-i", "headscale.deb")
+	installOutput, err := installCmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("DEBUG: Installation failed: %v, output: %s\n", err, string(installOutput))
+		// Try to fix dependencies
+		exec.Command("apt", "install", "-f", "-y").Run()
+		// Try installation again
+		installCmd = exec.Command("dpkg", "-i", "headscale.deb")
+		_, err = installCmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failed to install headscale .deb: %v", err)
+		}
+	}
+
+	// Clean up downloaded file
+	os.Remove("headscale.deb")
+
+	// Test the installation
+	if testCmd := exec.Command("headscale", "--help"); testCmd.Run() != nil {
+		return fmt.Errorf("headscale installation failed - binary not working")
+	}
+
+	fmt.Printf("DEBUG: Successfully installed headscale version %s\n", version)
 	return nil
 }
 
@@ -112,11 +166,11 @@ func (s *OverlayService) configureHeadscale(fqdn string) error {
 	domain := strings.Split(fqdn, ".")[0]
 
 	// Create config from template
-	// Use the same FQDN for Headscale server URL (this should be the public/routable address)
+	// Use port 50443 for all Headscale communication (no web UI exposure)
 	tmpl := template.Must(template.New("config").Parse(`---
 # Vexa Mesh Configuration
-server_url: http://{{ .FQDN }}/mesh
-listen_addr: 0.0.0.0:8443
+server_url: http://{{ .FQDN }}:50443
+listen_addr: 0.0.0.0:50443
 metrics_listen_addr: 127.0.0.1:9090
 grpc_listen_addr: 0.0.0.0:50443
 grpc_allow_insecure: true
@@ -499,5 +553,72 @@ func (s *OverlayService) GetOverlayStatus() (map[string]interface{}, error) {
 		"hostname":    hostname,
 		"fqdn":        fqdn,
 		"mesh_domain": "mesh",
+	}, nil
+}
+
+// TestFQDNAccessibility tests if an FQDN is publicly accessible
+func (s *OverlayService) TestFQDNAccessibility(fqdn string) (map[string]interface{}, error) {
+	fmt.Printf("DEBUG: Testing FQDN accessibility for: %s\n", fqdn)
+
+	// Test basic DNS resolution first
+	dnsCmd := exec.Command("nslookup", fqdn)
+	dnsOutput, dnsErr := dnsCmd.CombinedOutput()
+
+	if dnsErr != nil {
+		fmt.Printf("DEBUG: DNS resolution failed: %v\n", dnsErr)
+		return map[string]interface{}{
+			"accessible":  false,
+			"reason":      "DNS resolution failed",
+			"details":     string(dnsOutput),
+			"can_proceed": true,
+			"message":     "DNS resolution failed, but you can proceed with setup and configure DNS later",
+		}, nil
+	}
+
+	fmt.Printf("DEBUG: DNS resolution successful: %s\n", string(dnsOutput))
+
+	// Test HTTP connectivity on port 80
+	httpCmd := exec.Command("curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "--connect-timeout", "10", fmt.Sprintf("http://%s", fqdn))
+	httpOutput, httpErr := httpCmd.CombinedOutput()
+	httpCode := strings.TrimSpace(string(httpOutput))
+
+	fmt.Printf("DEBUG: HTTP test on port 80: code=%s, err=%v\n", httpCode, httpErr)
+
+	// Test HTTPS connectivity on port 443
+	httpsCmd := exec.Command("curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "--connect-timeout", "10", "-k", fmt.Sprintf("https://%s", fqdn))
+	httpsOutput, httpsErr := httpsCmd.CombinedOutput()
+	httpsCode := strings.TrimSpace(string(httpsOutput))
+
+	fmt.Printf("DEBUG: HTTPS test on port 443: code=%s, err=%v\n", httpsCode, httpsErr)
+
+	// Determine accessibility
+	accessible := false
+	reason := ""
+	canProceed := true
+	message := ""
+
+	if httpCode == "200" || httpsCode == "200" {
+		accessible = true
+		reason = "HTTP/HTTPS accessible"
+		message = "Great! Your FQDN is publicly accessible and ready for remote connections"
+	} else if httpCode == "000" && httpsCode == "000" {
+		reason = "No HTTP/HTTPS service responding"
+		message = "FQDN resolves but no web service is responding. This is normal for a domain controller - you can proceed with setup"
+	} else if strings.Contains(httpCode, "timeout") || strings.Contains(httpsCode, "timeout") {
+		reason = "Connection timeout"
+		message = "Connection timed out. Check firewall settings and port forwarding. You can still proceed with setup"
+	} else {
+		reason = fmt.Sprintf("HTTP returned %s, HTTPS returned %s", httpCode, httpsCode)
+		message = "FQDN is reachable but returning unexpected responses. You can proceed with setup"
+	}
+
+	return map[string]interface{}{
+		"accessible":  accessible,
+		"reason":      reason,
+		"http_code":   httpCode,
+		"https_code":  httpsCode,
+		"can_proceed": canProceed,
+		"message":     message,
+		"dns_output":  string(dnsOutput),
 	}, nil
 }

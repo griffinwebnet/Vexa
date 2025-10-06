@@ -3,7 +3,7 @@ set -e
 
 # Vexa Bootstrap Script
 echo "======================================"
-echo "  Vexa Bootstrap Installer  v0.1.68"
+echo "  Vexa Bootstrap Installer  v0.2.70"
 echo "======================================"
 echo ""
 
@@ -166,16 +166,7 @@ server {
     root /var/www/vexa/web/dist;
     index index.html;
 
-    # Headscale proxy (for Tailscale clients)
-    location /mesh/ {
-        proxy_pass http://localhost:8443/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_buffering off;
-        proxy_request_buffering off;
-    }
+    # Headscale runs directly on 50443 - no proxy needed
 
     # Vexa API proxy
     location /api/ {

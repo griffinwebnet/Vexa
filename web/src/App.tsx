@@ -9,6 +9,7 @@ import Groups from './pages/Groups'
 import Computers from './pages/Computers'
 import DNS from './pages/DNS'
 import Settings from './pages/Settings'
+import OverlayNetworking from './pages/OverlayNetworking'
 import SetupWizard from './pages/SetupWizard'
 import DomainManagement from './pages/DomainManagement'
 import DomainOUs from './pages/DomainOUs'
@@ -150,6 +151,11 @@ function App() {
             <Route path="settings" element={
               <AdminRoute>
                 <Settings />
+              </AdminRoute>
+            } />
+            <Route path="overlay" element={
+              <AdminRoute>
+                <OverlayNetworking />
               </AdminRoute>
             } />
           </Route>
