@@ -2,11 +2,14 @@ package services
 
 import (
 	"fmt"
+	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"strings"
 	"text/template"
+	"time"
 )
 
 // OverlayService handles Headscale/Tailscale overlay networking
@@ -49,8 +52,8 @@ func (s *OverlayService) SetupOverlay(fqdn string) error {
 		return fmt.Errorf("failed to install tailscale: %v", err)
 	}
 
-	// Join this server to the mesh
-	if err := s.joinMesh(); err != nil {
+	// Join this server to the mesh via localhost (not dependent on external connectivity)
+	if err := s.joinMeshLocal(fqdn); err != nil {
 		return fmt.Errorf("failed to join mesh: %v", err)
 	}
 
@@ -383,6 +386,34 @@ func (s *OverlayService) joinMesh() error {
 	return nil
 }
 
+// joinMeshLocal joins the mesh using localhost connection (not dependent on external connectivity)
+func (s *OverlayService) joinMeshLocal(fqdn string) error {
+	fmt.Printf("DEBUG: Joining mesh via localhost connection\n")
+
+	// Generate a pre-auth key for this server
+	cmd := exec.Command("headscale", "preauthkey", "create", "--reusable", "--expiration", "8760h")
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to create pre-auth key: %v", err)
+	}
+	authKey := strings.TrimSpace(string(output))
+
+	// Use localhost for the login server to avoid external connectivity dependency
+	loginServer := "http://127.0.0.1:50443"
+
+	fmt.Printf("DEBUG: Using localhost login server: %s\n", loginServer)
+
+	// Join mesh using localhost
+	joinCmd := exec.Command("tailscale", "up", "--authkey", authKey, "--login-server", loginServer, "--accept-routes")
+	joinOutput, joinErr := joinCmd.CombinedOutput()
+	if joinErr != nil {
+		return fmt.Errorf("failed to join mesh via localhost: %v, output: %s", joinErr, string(joinOutput))
+	}
+
+	fmt.Printf("DEBUG: Successfully joined mesh via localhost\n")
+	return nil
+}
+
 // AddMachine generates scripts for joining a new machine
 func (s *OverlayService) AddMachine(name string) (*JoinScripts, error) {
 	// Generate pre-auth key
@@ -556,7 +587,100 @@ func (s *OverlayService) GetOverlayStatus() (map[string]interface{}, error) {
 	}, nil
 }
 
-// TestFQDNAccessibility tests if an FQDN is publicly accessible
+// TestFQDNWithListener tests FQDN accessibility by setting up a temporary listener
+func (s *OverlayService) TestFQDNWithListener(fqdn string) (map[string]interface{}, error) {
+	fmt.Printf("DEBUG: Testing FQDN with temporary listener: %s\n", fqdn)
+
+	// First check DNS resolution
+	dnsCmd := exec.Command("nslookup", fqdn)
+	dnsOutput, dnsErr := dnsCmd.CombinedOutput()
+
+	if dnsErr != nil {
+		fmt.Printf("DEBUG: DNS resolution failed: %v\n", dnsErr)
+		return map[string]interface{}{
+			"accessible":  false,
+			"reason":      "DNS resolution failed",
+			"details":     string(dnsOutput),
+			"can_proceed": true,
+			"message":     "DNS resolution failed, but you can proceed with setup and configure DNS later",
+		}, nil
+	}
+
+	fmt.Printf("DEBUG: DNS resolution successful\n")
+
+	// Start a temporary HTTP server on port 50443
+	fmt.Printf("DEBUG: Starting temporary listener on port 50443\n")
+
+	// Create a simple HTTP server that responds with a test message
+	listener, err := net.Listen("tcp", ":50443")
+	if err != nil {
+		return map[string]interface{}{
+			"accessible":  false,
+			"reason":      "Port 50443 already in use",
+			"message":     "Port 50443 is already in use. Another service may be running.",
+			"can_proceed": true,
+		}, nil
+	}
+
+	// Start the server in a goroutine
+	server := &http.Server{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"test": "vexa-fqdn-test", "status": "success"}`))
+		}),
+	}
+
+	go func() {
+		server.Serve(listener)
+	}()
+
+	// Give the server a moment to start
+	time.Sleep(1 * time.Second)
+
+	// Test the FQDN with curl
+	fmt.Printf("DEBUG: Testing FQDN accessibility via port 50443\n")
+	testCmd := exec.Command("curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "--connect-timeout", "10", fmt.Sprintf("http://%s:50443", fqdn))
+	testOutput, testErr := testCmd.CombinedOutput()
+	testCode := strings.TrimSpace(string(testOutput))
+
+	// Stop the temporary server
+	listener.Close()
+	server.Close()
+
+	fmt.Printf("DEBUG: FQDN test result: code=%s, err=%v\n", testCode, testErr)
+
+	// Analyze results
+	accessible := false
+	reason := ""
+	message := ""
+	canProceed := true
+
+	if testCode == "200" {
+		accessible = true
+		reason = "FQDN is publicly accessible"
+		message = "Perfect! Your FQDN is accessible from the internet. Remote users will be able to connect."
+	} else if testCode == "000" || strings.Contains(testCode, "timeout") {
+		reason = "FQDN not accessible from internet"
+		message = "Cannot reach your FQDN from the internet. Check DNS settings and port forwarding."
+		canProceed = false
+	} else {
+		accessible = true
+		reason = fmt.Sprintf("FQDN accessible (HTTP %s)", testCode)
+		message = "Your FQDN is reachable, though returning an unexpected response. You can proceed with setup."
+	}
+
+	return map[string]interface{}{
+		"accessible":  accessible,
+		"reason":      reason,
+		"test_code":   testCode,
+		"can_proceed": canProceed,
+		"message":     message,
+		"dns_output":  string(dnsOutput),
+	}, nil
+}
+
+// TestFQDNAccessibility tests if an FQDN is publicly accessible (legacy method)
 func (s *OverlayService) TestFQDNAccessibility(fqdn string) (map[string]interface{}, error) {
 	fmt.Printf("DEBUG: Testing FQDN accessibility for: %s\n", fqdn)
 
@@ -577,19 +701,19 @@ func (s *OverlayService) TestFQDNAccessibility(fqdn string) (map[string]interfac
 
 	fmt.Printf("DEBUG: DNS resolution successful: %s\n", string(dnsOutput))
 
-	// Test HTTP connectivity on port 80
+	// Test Tailscale port 50443 connectivity
+	tailscaleCmd := exec.Command("curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "--connect-timeout", "10", fmt.Sprintf("http://%s:50443", fqdn))
+	tailscaleOutput, tailscaleErr := tailscaleCmd.CombinedOutput()
+	tailscaleCode := strings.TrimSpace(string(tailscaleOutput))
+
+	fmt.Printf("DEBUG: Tailscale port 50443 test: code=%s, err=%v\n", tailscaleCode, tailscaleErr)
+
+	// Also test basic HTTP connectivity on port 80 as secondary check
 	httpCmd := exec.Command("curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "--connect-timeout", "10", fmt.Sprintf("http://%s", fqdn))
 	httpOutput, httpErr := httpCmd.CombinedOutput()
 	httpCode := strings.TrimSpace(string(httpOutput))
 
 	fmt.Printf("DEBUG: HTTP test on port 80: code=%s, err=%v\n", httpCode, httpErr)
-
-	// Test HTTPS connectivity on port 443
-	httpsCmd := exec.Command("curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "--connect-timeout", "10", "-k", fmt.Sprintf("https://%s", fqdn))
-	httpsOutput, httpsErr := httpsCmd.CombinedOutput()
-	httpsCode := strings.TrimSpace(string(httpsOutput))
-
-	fmt.Printf("DEBUG: HTTPS test on port 443: code=%s, err=%v\n", httpsCode, httpsErr)
 
 	// Determine accessibility
 	accessible := false
@@ -597,28 +721,39 @@ func (s *OverlayService) TestFQDNAccessibility(fqdn string) (map[string]interfac
 	canProceed := true
 	message := ""
 
-	if httpCode == "200" || httpsCode == "200" {
-		accessible = true
-		reason = "HTTP/HTTPS accessible"
-		message = "Great! Your FQDN is publicly accessible and ready for remote connections"
-	} else if httpCode == "000" && httpsCode == "000" {
-		reason = "No HTTP/HTTPS service responding"
-		message = "FQDN resolves but no web service is responding. This is normal for a domain controller - you can proceed with setup"
-	} else if strings.Contains(httpCode, "timeout") || strings.Contains(httpsCode, "timeout") {
-		reason = "Connection timeout"
-		message = "Connection timed out. Check firewall settings and port forwarding. You can still proceed with setup"
+	// Primary test: Check Tailscale port 50443
+	if tailscaleCode == "000" || strings.Contains(tailscaleCode, "timeout") {
+		// Port 50443 not accessible - this is expected before setup
+		// Fall back to HTTP port 80 test for basic connectivity
+		isHttpGood := httpCode == "200" || httpCode == "301" || httpCode == "302" || httpCode == "404"
+
+		if isHttpGood {
+			accessible = true
+			reason = "FQDN accessible (port 50443 not yet configured - normal before setup)"
+			message = "Great! Your FQDN is reachable. Port 50443 will be configured during setup. You can proceed with overlay networking setup."
+		} else if httpCode == "000" || strings.Contains(httpCode, "timeout") {
+			reason = "FQDN may not be publicly accessible"
+			message = "Cannot reach your FQDN. Check DNS settings and ensure the domain points to this server's public IP."
+			canProceed = false
+		} else {
+			accessible = true
+			reason = fmt.Sprintf("FQDN accessible (HTTP %s)", httpCode)
+			message = "Your FQDN is reachable. You can proceed with overlay networking setup."
+		}
 	} else {
-		reason = fmt.Sprintf("HTTP returned %s, HTTPS returned %s", httpCode, httpsCode)
-		message = "FQDN is reachable but returning unexpected responses. You can proceed with setup"
+		// Port 50443 is responding - either already configured or something else is running
+		accessible = true
+		reason = fmt.Sprintf("Port 50443 is responding (HTTP %s)", tailscaleCode)
+		message = "Port 50443 is already responding. This may indicate Tailscale is already configured or another service is using this port."
 	}
 
 	return map[string]interface{}{
-		"accessible":  accessible,
-		"reason":      reason,
-		"http_code":   httpCode,
-		"https_code":  httpsCode,
-		"can_proceed": canProceed,
-		"message":     message,
-		"dns_output":  string(dnsOutput),
+		"accessible":     accessible,
+		"reason":         reason,
+		"tailscale_code": tailscaleCode,
+		"http_code":      httpCode,
+		"can_proceed":    canProceed,
+		"message":        message,
+		"dns_output":     string(dnsOutput),
 	}, nil
 }

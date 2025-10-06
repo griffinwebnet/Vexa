@@ -70,7 +70,7 @@ func (h *OverlayHandler) TestFQDN(c *gin.Context) {
 		return
 	}
 
-	result, err := h.overlayService.TestFQDNAccessibility(req.FQDN)
+	result, err := h.overlayService.TestFQDNWithListener(req.FQDN)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),

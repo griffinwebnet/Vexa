@@ -264,20 +264,7 @@ export default function OverlayNetworking() {
               {!showHeadscaleSetup ? (
                 <div className="space-y-4">
                   <div className="text-sm text-muted-foreground">
-                    <p className="mb-4">
-                      Overlay networking creates a secure mesh VPN that allows remote users and sites 
-                      to join your Vexa Domain without exposing all AD ports to the internet.
-                    </p>
-                    <div className="p-4 rounded-lg bg-accent">
-                      <div className="font-medium mb-2">Benefits:</div>
-                      <ul className="space-y-1">
-                        <li>• Remote workers can securely access domain resources</li>
-                        <li>• Branch offices can join your network</li>
-                        <li>• Individual devices can connect from anywhere</li>
-                        <li>• All traffic encrypted through Tailscale mesh</li>
-                        <li>• No need to expose domain controller to internet</li>
-                      </ul>
-                    </div>
+                    <p>Create a secure mesh VPN for remote access to your domain.</p>
                   </div>
 
                   <Button onClick={() => setShowHeadscaleSetup(true)} className="w-full">
@@ -364,50 +351,14 @@ export default function OverlayNetworking() {
                     </div>
                   )}
 
-                  <div className="p-4 rounded-lg bg-accent text-sm space-y-2">
-                    <div className="font-medium mb-2">What will be configured:</div>
-                    <ul className="space-y-1 text-muted-foreground">
-                      <li>✓ Install Headscale (self-hosted Tailscale coordinator)</li>
-                      <li>✓ Configure split DNS for your Vexa Domain</li>
-                      <li>✓ Create mesh domain ({fqdn ? fqdn.split('.')[0] : 'example'}.mesh)</li>
-                      <li>✓ Install Tailscale client on this server (100.64.0.1)</li>
-                      <li>✓ Generate 15-year pre-auth key for joining devices</li>
-                      <li>✓ Route all domain traffic through secure mesh network</li>
-                    </ul>
-                  </div>
-
-                  {/* FQDN Explanation */}
+                  {/* FQDN Explanation - Simplified */}
                   <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
                     <div className="flex items-start gap-3">
                       <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-                      <div className="space-y-2">
-                        <div className="font-medium text-blue-900 dark:text-blue-100">
-                          Tailscale FQDN vs Domain Controller Domain
-                        </div>
-                        <div className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
-                          <p><strong>Domain Controller:</strong> <code>company.local</code> (internal only)</p>
-                          <p><strong>Tailscale FQDN:</strong> <code>vpn.company.com</code> (public endpoint)</p>
-                          <p className="text-xs">These should be different domains - the Tailscale FQDN is for remote connections only.</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Port Forwarding Notice */}
-                  <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
-                    <div className="flex items-start gap-3">
-                      <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
-                      <div className="space-y-2">
-                        <div className="font-medium text-amber-900 dark:text-amber-100">
-                          Port Forwarding Required
-                        </div>
-                        <p className="text-sm text-amber-700 dark:text-amber-300">
-                          After setup, you'll need to forward <strong>port 50443</strong> on your router 
-                          to allow remote users to connect to your mesh network.
-                        </p>
-                        <div className="text-sm text-amber-700 dark:text-amber-300">
-                          <strong>Forward:</strong> External Port 50443 → Internal Port 50443 → This Server
-                        </div>
+                      <div className="text-sm text-blue-700 dark:text-blue-300">
+                        <p><strong>Domain Controller:</strong> <code>company.local</code> (internal)</p>
+                        <p><strong>Tailscale FQDN:</strong> <code>vpn.company.com</code> (public endpoint)</p>
+                        <p className="text-xs mt-1">These should be different domains.</p>
                       </div>
                     </div>
                   </div>
@@ -428,10 +379,20 @@ export default function OverlayNetworking() {
                     </Button>
                     <Button 
                       type="submit" 
-                      disabled={setupOverlay.isPending || testingFqdn || (fqdnTestResult && !fqdnTestResult.can_proceed)}
+                      disabled={setupOverlay.isPending || testingFqdn}
                     >
                       {setupOverlay.isPending ? 'Setting up...' : 'Setup Overlay Network'}
                     </Button>
+                    {fqdnTestResult && !fqdnTestResult.can_proceed && (
+                      <Button 
+                        type="button" 
+                        variant="destructive"
+                        onClick={() => setupOverlay.mutate({ fqdn })}
+                        disabled={setupOverlay.isPending}
+                      >
+                        Proceed Anyway
+                      </Button>
+                    )}
                   </div>
                 </form>
               )}
