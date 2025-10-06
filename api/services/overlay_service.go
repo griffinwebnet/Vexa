@@ -608,19 +608,39 @@ func (s *OverlayService) TestFQDNWithListener(fqdn string) (map[string]interface
 
 	fmt.Printf("DEBUG: DNS resolution successful\n")
 
+	// Check if port 50443 is already in use
+	fmt.Printf("DEBUG: Checking if port 50443 is available\n")
+	checkCmd := exec.Command("netstat", "-tlnp")
+	checkOutput, checkErr := checkCmd.Output()
+	if checkErr == nil {
+		outputStr := string(checkOutput)
+		if strings.Contains(outputStr, ":50443") {
+			fmt.Printf("DEBUG: Port 50443 is already in use\n")
+			return map[string]interface{}{
+				"accessible":  true,
+				"reason":      "Port 50443 already in use",
+				"message":     "Port 50443 is already in use. This may indicate Headscale is already running or another service is using this port.",
+				"can_proceed": true,
+			}, nil
+		}
+	}
+
 	// Start a temporary HTTP server on port 50443
 	fmt.Printf("DEBUG: Starting temporary listener on port 50443\n")
 
 	// Create a simple HTTP server that responds with a test message
 	listener, err := net.Listen("tcp", ":50443")
 	if err != nil {
+		fmt.Printf("DEBUG: Failed to bind to port 50443: %v\n", err)
 		return map[string]interface{}{
 			"accessible":  false,
-			"reason":      "Port 50443 already in use",
-			"message":     "Port 50443 is already in use. Another service may be running.",
-			"can_proceed": true,
+			"reason":      "Port 50443 binding failed",
+			"message":     fmt.Sprintf("Could not bind to port 50443: %v", err),
+			"can_proceed": false,
 		}, nil
 	}
+
+	fmt.Printf("DEBUG: Successfully bound to port 50443\n")
 
 	// Start the server in a goroutine
 	server := &http.Server{
