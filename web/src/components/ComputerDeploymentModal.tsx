@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/Dialog'
 import { Button } from './ui/Button'
-import { Input } from './ui/Input'
 import { Card } from './ui/Card'
 import { 
   Monitor, 
@@ -40,7 +39,7 @@ export default function ComputerDeploymentModal({
   domainController = 'dc.example.local'
 }: ComputerDeploymentModalProps) {
   const [selectedScript, setSelectedScript] = useState<string>('')
-  const [formData, setFormData] = useState({
+  const [formData] = useState({
     domainName,
     domainController,
     computerName: 'Auto-detect from system'
