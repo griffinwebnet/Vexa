@@ -39,6 +39,14 @@ export default function Computers() {
     },
   })
 
+  const { data: domainStatus } = useQuery({
+    queryKey: ['domainStatus'],
+    queryFn: async () => {
+      const response = await api.get('/domain/status')
+      return response.data
+    },
+  })
+
   const getStatusDot = (computer: Computer) => {
     if (!computer.online) {
       return <Circle className="h-3 w-3 fill-gray-400 text-gray-400" />
@@ -192,8 +200,8 @@ export default function Computers() {
       <ComputerDeploymentModal
         isOpen={isDeploymentModalOpen}
         onClose={() => setIsDeploymentModalOpen(false)}
-        domainName="example.local"
-        domainController="dc.example.local"
+        domainName={domainStatus?.domain || "example.local"}
+        domainController={domainStatus?.domain ? `dc.${domainStatus.domain}` : "dc.example.local"}
       />
     </div>
   )

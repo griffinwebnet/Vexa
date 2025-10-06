@@ -64,7 +64,7 @@ export default function ComputerDeploymentModal({
     try {
       const response = await api.get('/deployment/scripts')
       setDeploymentScripts(response.data.scripts)
-      setHeadscaleEnabled(response.data.headscale_enabled)
+      setHeadscaleEnabled(response.data.headscale_enabled || false)
     } catch (error) {
       console.error('Failed to fetch deployment scripts:', error)
       // Fallback to default scripts if API fails

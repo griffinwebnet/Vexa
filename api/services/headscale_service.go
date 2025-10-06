@@ -3,20 +3,21 @@ package services
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
-	"github.com/vexa/api/exec"
+	vexaexec "github.com/vexa/api/exec"
 )
 
 // HeadscaleService handles Headscale-related business logic
 type HeadscaleService struct {
-	headscaleTool *exec.HeadscaleTool
+	headscaleTool *vexaexec.HeadscaleTool
 }
 
 // NewHeadscaleService creates a new HeadscaleService instance
 func NewHeadscaleService() *HeadscaleService {
 	return &HeadscaleService{
-		headscaleTool: exec.NewHeadscaleTool(),
+		headscaleTool: vexaexec.NewHeadscaleTool(),
 	}
 }
 
@@ -51,7 +52,7 @@ func (s *HeadscaleService) GetStatus() (map[string]interface{}, error) {
 }
 
 // CreatePreAuthKey creates a new pre-auth key for deployment
-func (s *HeadscaleService) CreatePreAuthKey(user string, reusable bool, ephemeral bool) (*exec.PreAuthKey, error) {
+func (s *HeadscaleService) CreatePreAuthKey(user string, reusable bool, ephemeral bool) (*vexaexec.PreAuthKey, error) {
 
 	// Create actual pre-auth key
 	key, err := s.headscaleTool.CreatePreAuthKey(user, reusable, ephemeral)
@@ -68,7 +69,9 @@ func (s *HeadscaleService) IsEnabled() bool {
 		return true // Always enabled in development mode
 	}
 
-	return s.headscaleTool.IsEnabled()
+	// Check if Headscale service is running
+	cmd := exec.Command("systemctl", "is-active", "headscale")
+	return cmd.Run() == nil
 }
 
 // GetLoginServerBase returns the Headscale login server base URL without the

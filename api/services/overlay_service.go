@@ -742,14 +742,24 @@ func (s *OverlayService) GetOverlayStatus() (map[string]interface{}, error) {
 		}
 	}
 
+	// Determine status
+	status := "not_configured"
+	if headscaleActive && tailscaleActive {
+		status = "configured"
+	} else if headscaleActive || tailscaleActive {
+		status = "partial"
+	}
+
 	return map[string]interface{}{
 		"enabled":     headscaleActive && tailscaleActive,
+		"status":      status,
 		"headscale":   headscaleActive,
 		"tailscale":   tailscaleActive,
 		"ip":          ip,
 		"hostname":    hostname,
 		"fqdn":        fqdn,
 		"mesh_domain": "mesh",
+		"server_ip":   "127.0.0.1", // Default server IP
 	}, nil
 }
 

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/json"
 	"fmt"
 	exec "os/exec"
 	"strings"
@@ -35,6 +36,9 @@ func (s *ComputerService) ListComputers() ([]models.Computer, error) {
 	// Check if Headscale is enabled
 	headscaleEnabled := s.isHeadscaleEnabled()
 
+	// Get domain controller hostname
+	dcHostname := s.getDomainControllerHostname()
+
 	for _, name := range computerNames {
 		if name == "" {
 			continue
@@ -68,6 +72,35 @@ func (s *ComputerService) ListComputers() ([]models.Computer, error) {
 		}
 
 		computers = append(computers, computer)
+	}
+
+	// Add domain controller if it's not already in the list and Headscale is enabled
+	if headscaleEnabled && dcHostname != "" {
+		dcExists := false
+		for _, comp := range computers {
+			if comp.Name == dcHostname || comp.Name == strings.TrimSuffix(dcHostname, "$") {
+				dcExists = true
+				break
+			}
+		}
+
+		if !dcExists {
+			dcComputer := models.Computer{
+				Name:           strings.TrimSuffix(dcHostname, "$"),
+				DNSName:        dcHostname,
+				Online:         false,
+				ConnectionType: "offline",
+			}
+
+			// Check if DC is online via overlay
+			if overlayIP := s.getHeadscaleIP(dcHostname); overlayIP != "" {
+				dcComputer.OverlayIP = overlayIP
+				dcComputer.Online = true
+				dcComputer.ConnectionType = "overlay"
+			}
+
+			computers = append(computers, dcComputer)
+		}
 	}
 
 	return computers, nil
@@ -131,8 +164,36 @@ func (s *ComputerService) getHeadscaleIP(hostname string) string {
 		return ""
 	}
 
-	// TODO: Parse JSON to find node by hostname and return its IP
-	// For now, return empty - this requires proper JSON parsing
-	_ = output
+	// Parse JSON to find node by hostname and return its IP
+	var nodes []map[string]interface{}
+	if err := json.Unmarshal(output, &nodes); err != nil {
+		return ""
+	}
+
+	for _, node := range nodes {
+		if nodeHostname, ok := node["name"].(string); ok {
+			// Check if hostname matches (with or without $ suffix)
+			if nodeHostname == hostname || nodeHostname == hostname+"$" ||
+				strings.TrimSuffix(nodeHostname, "$") == hostname {
+				if ipv4, ok := node["ipv4"].(string); ok && ipv4 != "" {
+					return ipv4
+				}
+				// Try alternative IP field names
+				if ip, ok := node["ip"].(string); ok && ip != "" {
+					return ip
+				}
+			}
+		}
+	}
 	return ""
+}
+
+func (s *ComputerService) getDomainControllerHostname() string {
+	// Get hostname of the current system
+	cmd := exec.Command("hostname")
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(output))
 }
