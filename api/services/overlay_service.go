@@ -196,7 +196,7 @@ func (s *OverlayService) configureHeadscale(fqdn string) error {
 server_url: http://{{ .FQDN }}:50443
 listen_addr: 0.0.0.0:50443
 metrics_listen_addr: 127.0.0.1:9090
-grpc_listen_addr: 0.0.0.0:50443
+grpc_listen_addr: 127.0.0.1:50444
 grpc_allow_insecure: true
 
 noise:
