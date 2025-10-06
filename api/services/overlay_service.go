@@ -90,26 +90,15 @@ func (s *OverlayService) installHeadscale() error {
 
 	fmt.Printf("DEBUG: Detected architecture: %s\n", arch)
 
-	// Get latest version from GitHub API
-	fmt.Printf("DEBUG: Getting latest headscale version\n")
-	versionCmd := exec.Command("curl", "-s", "https://api.github.com/repos/juanfont/headscale/releases/latest")
-	versionOutput, err := versionCmd.Output()
-	if err != nil {
-		return fmt.Errorf("failed to get latest version: %v", err)
-	}
+	// Use a hardcoded version instead of relying on GitHub API
+	fmt.Printf("DEBUG: Using hardcoded headscale version\n")
+	version := "0.22.3" // Latest stable version as of October 2023
 
-	// Parse version from JSON (simple approach)
-	versionOutputStr := string(versionOutput)
-	versionStart := strings.Index(versionOutputStr, `"tag_name":"v`)
-	if versionStart == -1 {
-		return fmt.Errorf("could not parse version from GitHub API response")
-	}
-	versionStart += len(`"tag_name":"v`)
-	versionEnd := strings.Index(versionOutputStr[versionStart:], `"`)
-	if versionEnd == -1 {
-		return fmt.Errorf("could not parse version from GitHub API response")
-	}
-	version := versionOutputStr[versionStart : versionStart+versionEnd]
+	fmt.Printf("DEBUG: Using headscale version: %s\n", version)
+
+	// Print full URL for debugging
+	fmt.Printf("DEBUG: Full URL would be: https://github.com/juanfont/headscale/releases/download/v%s/headscale_%s_linux_%s.deb\n",
+		version, version, arch)
 
 	fmt.Printf("DEBUG: Latest headscale version: %s\n", version)
 
