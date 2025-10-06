@@ -533,7 +533,7 @@ func (s *OverlayService) joinMeshLocal(fqdn string, meshDomain string) error {
 
 	// Generate a pre-auth key for this server using the user ID
 	fmt.Printf("DEBUG: Creating pre-auth key for infrastructure user (ID: %d)\n", userID)
-	cmd := exec.Command("headscale", "preauthkeys", "create", "--reusable", "--expiration", "131400h", "-u", fmt.Sprintf("%d", userID), "-c", "/etc/headscale/config.yaml")
+	cmd := exec.Command("headscale", "preauthkeys", "create", "--reusable", "--expiration", "131400h", "-u", fmt.Sprintf("%d", userID), "-c", "/etc/headscale/config.yaml", "-o", "json")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// Add more detailed error information
@@ -552,7 +552,16 @@ func (s *OverlayService) joinMeshLocal(fqdn string, meshDomain string) error {
 
 		return fmt.Errorf("failed to create pre-auth key: %v, output: %s", err, string(output))
 	}
-	authKey := strings.TrimSpace(string(output))
+
+	// Parse JSON output to get the key
+	var keyResponse struct {
+		Key string `json:"key"`
+	}
+	if err := json.Unmarshal(output, &keyResponse); err != nil {
+		return fmt.Errorf("failed to parse pre-auth key response: %v", err)
+	}
+
+	authKey := strings.TrimSpace(keyResponse.Key)
 	fmt.Printf("DEBUG: Pre-auth key created: %s\n", authKey)
 
 	// Use localhost for the login server to avoid external connectivity dependency
