@@ -3,7 +3,7 @@ package version
 // Version information for the entire Vexa system
 const (
 	// Current version of the entire system (API and Web)
-	Current = "0.2.78"
+	Current = "0.2.79"
 )
 
 // Components returns version information for all system components

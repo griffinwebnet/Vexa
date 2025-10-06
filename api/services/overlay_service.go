@@ -379,13 +379,30 @@ func (s *OverlayService) joinMesh() error {
 func (s *OverlayService) joinMeshLocal(fqdn string) error {
 	fmt.Printf("DEBUG: Joining mesh via localhost connection\n")
 
+	// First ensure headscale service is running
+	fmt.Printf("DEBUG: Ensuring headscale service is running\n")
+	exec.Command("systemctl", "start", "headscale").Run()
+	time.Sleep(2 * time.Second) // Give it time to start
+
+	// Create a user called 'infrastructure'
+	fmt.Printf("DEBUG: Creating infrastructure user\n")
+	userCmd := exec.Command("headscale", "users", "create", "infrastructure")
+	userOutput, userErr := userCmd.CombinedOutput()
+	if userErr != nil {
+		// If it fails because the user already exists, that's fine
+		fmt.Printf("DEBUG: User creation output: %s\n", string(userOutput))
+		fmt.Printf("DEBUG: User might already exist, continuing...\n")
+	}
+
 	// Generate a pre-auth key for this server
-	cmd := exec.Command("headscale", "preauthkey", "create", "--reusable", "--expiration", "8760h")
-	output, err := cmd.Output()
+	fmt.Printf("DEBUG: Creating pre-auth key for infrastructure user\n")
+	cmd := exec.Command("headscale", "preauthkeys", "create", "--reusable", "--expiration", "131400h", "-u", "infrastructure")
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to create pre-auth key: %v", err)
+		return fmt.Errorf("failed to create pre-auth key: %v, output: %s", err, string(output))
 	}
 	authKey := strings.TrimSpace(string(output))
+	fmt.Printf("DEBUG: Pre-auth key created: %s\n", authKey)
 
 	// Use localhost for the login server to avoid external connectivity dependency
 	loginServer := "http://127.0.0.1:50443"
@@ -393,7 +410,7 @@ func (s *OverlayService) joinMeshLocal(fqdn string) error {
 	fmt.Printf("DEBUG: Using localhost login server: %s\n", loginServer)
 
 	// Join mesh using localhost
-	joinCmd := exec.Command("tailscale", "up", "--authkey", authKey, "--login-server", loginServer, "--accept-routes")
+	joinCmd := exec.Command("tailscale", "up", "--authkey", authKey, "--login-server", loginServer, "--accept-routes", "--hostname", "vexa-server")
 	joinOutput, joinErr := joinCmd.CombinedOutput()
 	if joinErr != nil {
 		return fmt.Errorf("failed to join mesh via localhost: %v, output: %s", joinErr, string(joinOutput))
