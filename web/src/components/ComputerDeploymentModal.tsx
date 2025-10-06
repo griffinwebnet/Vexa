@@ -39,11 +39,6 @@ export default function ComputerDeploymentModal({
   domainController = 'dc.example.local'
 }: ComputerDeploymentModalProps) {
   const [selectedScript, setSelectedScript] = useState<string>('')
-  const [formData] = useState({
-    domainName,
-    domainController,
-    computerName: 'Auto-detect from system'
-  })
   const [generatedCommand, setGeneratedCommand] = useState<string>('')
   const [isGenerating, setIsGenerating] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -57,6 +52,13 @@ export default function ComputerDeploymentModal({
       fetchDeploymentScripts()
     }
   }, [isOpen])
+
+  // Auto-generate command when script is selected
+  useEffect(() => {
+    if (selectedScript && !generatedCommand) {
+      generateCommand()
+    }
+  }, [selectedScript, generatedCommand])
 
   const fetchDeploymentScripts = async () => {
     setIsLoadingScripts(true)
@@ -105,9 +107,9 @@ export default function ComputerDeploymentModal({
     try {
       const response = await api.post('/deployment/generate', {
         script_type: selectedScript,
-        domain_name: formData.domainName,
-        domain_controller: formData.domainController,
-        computer_name: formData.computerName || undefined
+        domain_name: domainName,
+        domain_controller: domainController,
+        computer_name: undefined // Let the script auto-detect
       })
       
       setGeneratedCommand(response.data.command)
@@ -214,66 +216,16 @@ export default function ComputerDeploymentModal({
             )}
           </div>
 
-          {/* Configuration Summary */}
-          {selectedScript && (
-            <div>
-              <h3 className="text-lg font-semibold mb-4">Configuration</h3>
-              <div className="grid gap-4 md:grid-cols-2">
-                {(selectedScript === 'tailscale-domain' || selectedScript === 'domain-only') && (
-                  <>
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Domain Name</label>
-                      <div className="p-3 bg-muted rounded-lg text-sm">
-                        {formData.domainName}
-                      </div>
-                    </div>
-                    {selectedScript === 'tailscale-domain' && (
-                      <div>
-                        <label className="text-sm font-medium mb-2 block">Domain Controller</label>
-                        <div className="p-3 bg-muted rounded-lg text-sm">
-                          {formData.domainController}
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Computer Name</label>
-                  <div className="p-3 bg-muted rounded-lg text-sm">
-                    {formData.computerName}
-                  </div>
-                </div>
+          {/* Show info about automatic setup */}
+          {selectedScript && (selectedScript === 'tailscale-domain' || selectedScript === 'tailnet-add') && (
+            <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
+              <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                <CheckCircle className="h-4 w-4" />
+                <span className="text-sm font-medium">Automatic Setup</span>
               </div>
-
-              {/* Show info about automatic auth key generation */}
-              {(selectedScript === 'tailscale-domain' || selectedScript === 'tailnet-add') && (
-                <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
-                  <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
-                    <CheckCircle className="h-4 w-4" />
-                    <span className="text-sm font-medium">Automatic Setup</span>
-                  </div>
-                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                    A pre-auth key will be automatically generated and included in the deployment command. No manual configuration needed.
-                  </p>
-                </div>
-              )}
-
-              <div className="mt-4">
-                <Button onClick={generateCommand} disabled={isGenerating}>
-                  {isGenerating ? (
-                    <>
-                      <Download className="h-4 w-4 mr-2 animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <Download className="h-4 w-4 mr-2" />
-                      Generate Command
-                    </>
-                  )}
-                </Button>
-              </div>
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                A pre-auth key will be automatically generated and included in the deployment command. No manual configuration needed.
+              </p>
             </div>
           )}
 
