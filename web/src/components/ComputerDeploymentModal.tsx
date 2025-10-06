@@ -4,7 +4,6 @@ import { Button } from './ui/Button'
 import { Card } from './ui/Card'
 import { 
   Monitor, 
-  Download, 
   Copy, 
   CheckCircle, 
   AlertCircle,
@@ -40,7 +39,7 @@ export default function ComputerDeploymentModal({
 }: ComputerDeploymentModalProps) {
   const [selectedScript, setSelectedScript] = useState<string>('')
   const [generatedCommand, setGeneratedCommand] = useState<string>('')
-  const [isGenerating, setIsGenerating] = useState(false)
+  const [, setIsGenerating] = useState(false)
   const [copied, setCopied] = useState(false)
   const [deploymentScripts, setDeploymentScripts] = useState<DeploymentScript[]>([])
   const [headscaleEnabled, setHeadscaleEnabled] = useState(true)

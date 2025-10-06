@@ -258,7 +258,8 @@ dns:
   override_local_dns: true
   nameservers:
     global:
-      - 100.64.0.1
+      - 1.1.1.1
+      - 8.8.8.8
     split:
       {{ .Realm }}:
         - 100.64.0.1

@@ -3,7 +3,7 @@ set -e
 
 # Vexa Bootstrap Script
 echo "======================================"
-echo "  Vexa Bootstrap Installer  v0.2.91"
+echo "  Vexa Bootstrap Installer  v0.2.93"
 echo "======================================"
 echo ""
 
