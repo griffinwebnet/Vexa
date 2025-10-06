@@ -625,21 +625,55 @@ func (s *OverlayService) TestFQDNWithListener(fqdn string) (map[string]interface
 	// Start the server in a goroutine
 	server := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"test": "vexa-fqdn-test", "status": "success"}`))
+			fmt.Printf("DEBUG: Received request: %s %s\n", r.Method, r.URL.Path)
+			// Handle different paths that Headscale might use
+			if r.URL.Path == "/" || r.URL.Path == "/api/v1" || r.URL.Path == "/mesh" {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte(`{"test": "vexa-fqdn-test", "status": "success"}`))
+				fmt.Printf("DEBUG: Sent 200 response\n")
+			} else {
+				w.WriteHeader(http.StatusNotFound)
+				w.Write([]byte("Not found"))
+				fmt.Printf("DEBUG: Sent 404 response\n")
+			}
 		}),
 	}
 
 	go func() {
-		server.Serve(listener)
+		fmt.Printf("DEBUG: Starting HTTP server on port 50443\n")
+		if err := server.Serve(listener); err != nil {
+			fmt.Printf("DEBUG: Server error: %v\n", err)
+		}
 	}()
 
 	// Give the server a moment to start
 	time.Sleep(1 * time.Second)
 
-	// Test the FQDN with curl
-	fmt.Printf("DEBUG: Testing FQDN accessibility via port 50443\n")
+	// First test local connectivity to make sure our listener is working
+	fmt.Printf("DEBUG: Testing local listener on port 50443\n")
+	localTestCmd := exec.Command("curl", "-v", "--connect-timeout", "5", "http://127.0.0.1:50443")
+	localOutput, localErr := localTestCmd.CombinedOutput()
+	localCode := "000" // Default to failure
+
+	// Parse the output to get HTTP status code
+	outputStr := string(localOutput)
+	fmt.Printf("DEBUG: Local curl output: %s\n", outputStr)
+	fmt.Printf("DEBUG: Local curl error: %v\n", localErr)
+
+	// Look for HTTP status in the verbose output
+	if strings.Contains(outputStr, "HTTP/1.1 200") || strings.Contains(outputStr, "HTTP/2 200") {
+		localCode = "200"
+	} else if strings.Contains(outputStr, "Connection refused") {
+		localCode = "000"
+	} else if strings.Contains(outputStr, "timeout") {
+		localCode = "timeout"
+	}
+
+	fmt.Printf("DEBUG: Local test result: code=%s\n", localCode)
+
+	// Now test external FQDN accessibility
+	fmt.Printf("DEBUG: Testing external FQDN accessibility via port 50443\n")
 	testCmd := exec.Command("curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "--connect-timeout", "10", fmt.Sprintf("http://%s:50443", fqdn))
 	testOutput, testErr := testCmd.CombinedOutput()
 	testCode := strings.TrimSpace(string(testOutput))
@@ -648,7 +682,7 @@ func (s *OverlayService) TestFQDNWithListener(fqdn string) (map[string]interface
 	listener.Close()
 	server.Close()
 
-	fmt.Printf("DEBUG: FQDN test result: code=%s, err=%v\n", testCode, testErr)
+	fmt.Printf("DEBUG: External FQDN test result: code=%s, err=%v\n", testCode, testErr)
 
 	// Analyze results
 	accessible := false
@@ -656,27 +690,36 @@ func (s *OverlayService) TestFQDNWithListener(fqdn string) (map[string]interface
 	message := ""
 	canProceed := true
 
-	if testCode == "200" {
+	// Check if local listener is working
+	if localCode != "200" {
+		reason = "Local listener failed"
+		message = "Failed to start test listener. Port 50443 may be in use or system error occurred."
+		canProceed = false
+	} else if testCode == "200" {
+		// External test succeeded
 		accessible = true
 		reason = "FQDN is publicly accessible"
 		message = "Perfect! Your FQDN is accessible from the internet. Remote users will be able to connect."
 	} else if testCode == "000" || strings.Contains(testCode, "timeout") {
+		// External test failed - likely DNS or firewall issue
 		reason = "FQDN not accessible from internet"
 		message = "Cannot reach your FQDN from the internet. Check DNS settings and port forwarding."
 		canProceed = false
 	} else {
+		// External test got some response but not 200
 		accessible = true
 		reason = fmt.Sprintf("FQDN accessible (HTTP %s)", testCode)
 		message = "Your FQDN is reachable, though returning an unexpected response. You can proceed with setup."
 	}
 
 	return map[string]interface{}{
-		"accessible":  accessible,
-		"reason":      reason,
-		"test_code":   testCode,
-		"can_proceed": canProceed,
-		"message":     message,
-		"dns_output":  string(dnsOutput),
+		"accessible":    accessible,
+		"reason":        reason,
+		"local_code":    localCode,
+		"external_code": testCode,
+		"can_proceed":   canProceed,
+		"message":       message,
+		"dns_output":    string(dnsOutput),
 	}, nil
 }
 
