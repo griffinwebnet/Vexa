@@ -178,7 +178,15 @@ func (s *OverlayService) configureHeadscale(fqdn string) error {
 		return fmt.Errorf("domain not provisioned - cannot configure headscale without AD domain")
 	}
 
-	fmt.Printf("DEBUG: Using NetBIOS domain: %s, Realm: %s, FQDN: %s\n", netbiosDomain, realm, fqdn)
+	// Get the actual server hostname
+	hostnameCmd := exec.Command("hostname")
+	hostnameOutput, err := hostnameCmd.Output()
+	serverHostname := "dc" // fallback
+	if err == nil {
+		serverHostname = strings.TrimSpace(string(hostnameOutput))
+	}
+
+	fmt.Printf("DEBUG: Using NetBIOS domain: %s, Realm: %s, FQDN: %s, Server hostname: %s\n", netbiosDomain, realm, fqdn, serverHostname)
 	fmt.Printf("DEBUG: Domain status: %+v\n", domainStatus)
 
 	// Create config and data directories
@@ -265,7 +273,7 @@ dns:
     - name: "{{ .NetBIOSDomain }}"
       type: "A"
       value: "100.64.0.1"
-    - name: "dc.{{ .Realm }}"
+    - name: "{{ .ServerHostname }}.{{ .Realm }}"
       type: "A"
       value: "100.64.0.1"
 
@@ -282,13 +290,15 @@ randomize_client_port: false`))
 	defer f.Close()
 
 	data := struct {
-		FQDN          string
-		NetBIOSDomain string
-		Realm         string
+		FQDN           string
+		NetBIOSDomain  string
+		Realm          string
+		ServerHostname string
 	}{
-		FQDN:          fqdn,
-		NetBIOSDomain: netbiosDomain,
-		Realm:         realm,
+		FQDN:           fqdn,
+		NetBIOSDomain:  netbiosDomain,
+		Realm:          realm,
+		ServerHostname: serverHostname,
 	}
 
 	if err := tmpl.Execute(f, data); err != nil {
@@ -389,6 +399,24 @@ func (s *OverlayService) installTailscale() error {
 	if err := cmd.Run(); err != nil {
 		return err
 	}
+
+	// Configure Tailscale to not override system DNS
+	// Create a systemd override to prevent DNS override
+	overrideDir := "/etc/systemd/system/tailscaled.service.d"
+	os.MkdirAll(overrideDir, 0755)
+
+	overrideConfig := `[Service]
+Environment="TAILSCALE_USE_WIPING_IPTABLES_RULES=true"
+Environment="TAILSCALE_ACCEPT_DNS=false"
+ExecStart=
+ExecStart=/usr/sbin/tailscaled --state=/var/lib/tailscale/tailscaled.state --socket=/run/tailscale/tailscaled.sock --port=41641 --tun=tailscale0 --accept-dns=false`
+
+	if err := os.WriteFile(overrideDir+"/override.conf", []byte(overrideConfig), 0644); err != nil {
+		fmt.Printf("WARNING: Failed to create Tailscale override: %v\n", err)
+	}
+
+	// Reload systemd
+	exec.Command("systemctl", "daemon-reload").Run()
 
 	return nil
 }
@@ -524,7 +552,7 @@ func (s *OverlayService) joinMeshLocal(fqdn string, meshDomain string) error {
 	fmt.Printf("DEBUG: Using localhost login server: %s\n", loginServer)
 
 	// Join mesh using localhost
-	joinCmd := exec.Command("tailscale", "up", "--authkey", authKey, "--login-server", loginServer, "--accept-routes", "--hostname", "vexa-server")
+	joinCmd := exec.Command("tailscale", "up", "--authkey", authKey, "--login-server", loginServer, "--accept-routes", "--accept-dns=false", "--hostname", "vexa-server")
 	joinOutput, joinErr := joinCmd.CombinedOutput()
 	if joinErr != nil {
 		return fmt.Errorf("failed to join mesh via localhost: %v, output: %s", joinErr, string(joinOutput))
@@ -725,7 +753,7 @@ func (s *OverlayService) GetOverlayStatus() (map[string]interface{}, error) {
 	}, nil
 }
 
-// fixDNSForwarder configures Samba DNS to forward external queries to proper DNS servers
+// fixDNSForwarder configures DNS forwarding to prevent DNS loops
 func (s *OverlayService) fixDNSForwarder() error {
 	// Get system DNS servers
 	systemDNS := s.getSystemDNSServers()
@@ -746,11 +774,26 @@ func (s *OverlayService) fixDNSForwarder() error {
 		}
 	}
 
-	// Restart Samba service to apply DNS changes
-	cmd := exec.Command("systemctl", "restart", "samba-ad-dc")
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to restart samba-ad-dc: %v", err)
+	// Fix systemd-resolved configuration to prevent DNS loops
+	// Create a custom systemd-resolved config that doesn't use Tailscale DNS for external queries
+	resolvedConfig := `[Resolve]
+DNS=8.8.8.8 1.1.1.1
+Domains=~.
+DNSSEC=yes
+DNSOverTLS=no
+MulticastDNS=no
+LLMNR=no
+Cache=yes
+DNSStubListener=yes
+ReadEtcHosts=yes`
+
+	if err := os.WriteFile("/etc/systemd/resolved.conf.d/vexa-dns.conf", []byte(resolvedConfig), 0644); err != nil {
+		fmt.Printf("WARNING: Failed to write systemd-resolved config: %v\n", err)
 	}
+
+	// Restart services to apply DNS changes
+	exec.Command("systemctl", "restart", "systemd-resolved").Run()
+	exec.Command("systemctl", "restart", "samba-ad-dc").Run()
 
 	return nil
 }
