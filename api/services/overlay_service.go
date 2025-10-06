@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -441,6 +442,7 @@ func (s *OverlayService) joinMesh() error {
 // joinMeshLocal joins the mesh using localhost connection (not dependent on external connectivity)
 func (s *OverlayService) joinMeshLocal(fqdn string, meshDomain string) error {
 	fmt.Printf("DEBUG: Joining mesh via localhost connection\n")
+	_, _ = fqdn, meshDomain // Mark as intentionally unused
 
 	// First ensure headscale service is running
 	fmt.Printf("DEBUG: Ensuring headscale service is running\n")
@@ -488,7 +490,7 @@ func (s *OverlayService) joinMeshLocal(fqdn string, meshDomain string) error {
 		fmt.Printf("DEBUG: Headscale status check error: %v\n", statusErr)
 	}
 
-	// Create a user called 'infrastructure'
+	// Create a user called 'infrastructure' and get its ID
 	fmt.Printf("DEBUG: Creating infrastructure user\n")
 	userCmd := exec.Command("headscale", "users", "create", "infrastructure", "-c", "/etc/headscale/config.yaml")
 	userOutput, userErr := userCmd.CombinedOutput()
@@ -498,9 +500,40 @@ func (s *OverlayService) joinMeshLocal(fqdn string, meshDomain string) error {
 		fmt.Printf("DEBUG: User might already exist, continuing...\n")
 	}
 
-	// Generate a pre-auth key for this server
-	fmt.Printf("DEBUG: Creating pre-auth key for infrastructure user\n")
-	cmd := exec.Command("headscale", "preauthkeys", "create", "--reusable", "--expiration", "131400h", "-u", "infrastructure", "-c", "/etc/headscale/config.yaml")
+	// Get the user ID for the infrastructure user
+	fmt.Printf("DEBUG: Getting infrastructure user ID\n")
+	listCmd := exec.Command("headscale", "users", "list", "-c", "/etc/headscale/config.yaml", "-o", "json")
+	listOutput, listErr := listCmd.CombinedOutput()
+	if listErr != nil {
+		return fmt.Errorf("failed to list users: %v, output: %s", listErr, string(listOutput))
+	}
+
+	// Parse the JSON output to find the infrastructure user ID
+	var users []struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(listOutput, &users); err != nil {
+		return fmt.Errorf("failed to parse users list: %v", err)
+	}
+
+	var userID int
+	for _, user := range users {
+		if user.Name == "infrastructure" {
+			userID = user.ID
+			break
+		}
+	}
+
+	if userID == 0 {
+		return fmt.Errorf("infrastructure user not found")
+	}
+
+	fmt.Printf("DEBUG: Found infrastructure user with ID: %d\n", userID)
+
+	// Generate a pre-auth key for this server using the user ID
+	fmt.Printf("DEBUG: Creating pre-auth key for infrastructure user (ID: %d)\n", userID)
+	cmd := exec.Command("headscale", "preauthkeys", "create", "--reusable", "--expiration", "131400h", "-u", fmt.Sprintf("%d", userID), "-c", "/etc/headscale/config.yaml")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// Add more detailed error information
