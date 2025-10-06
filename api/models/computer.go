@@ -10,4 +10,5 @@ type Computer struct {
 	Online          bool   `json:"online"`
 	IPAddress       string `json:"ip_address,omitempty"`
 	OverlayIP       string `json:"overlay_ip,omitempty"`
+	OverlayURL      string `json:"overlay_url,omitempty"`
 }

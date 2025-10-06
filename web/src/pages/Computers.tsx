@@ -17,6 +17,7 @@ interface Computer {
   online: boolean
   ip_address?: string
   overlay_ip?: string
+  overlay_url?: string
 }
 
 export default function Computers() {
@@ -133,7 +134,9 @@ export default function Computers() {
                     <div>
                       <p className="font-medium">{computer.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        {computer.dns_name}
+                        {computer.connection_type === 'overlay' && computer.overlay_url 
+                          ? computer.overlay_url 
+                          : computer.dns_name}
                       </p>
                       {computer.operating_system && (
                         <p className="text-xs text-muted-foreground">
@@ -143,14 +146,15 @@ export default function Computers() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    {computer.online && computer.ip_address && (
+                    {computer.online && (
                       <div className="text-right text-xs text-muted-foreground">
-                        <div className="font-mono">{computer.ip_address}</div>
-                        {computer.overlay_ip && (
+                        {computer.connection_type === 'overlay' && computer.overlay_ip ? (
                           <div className="font-mono text-green-600 dark:text-green-400">
                             {computer.overlay_ip}
                           </div>
-                        )}
+                        ) : computer.ip_address ? (
+                          <div className="font-mono">{computer.ip_address}</div>
+                        ) : null}
                       </div>
                     )}
                     {getConnectionBadge(computer)}

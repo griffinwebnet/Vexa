@@ -43,7 +43,7 @@ export default function ComputerDeploymentModal({
   const [formData, setFormData] = useState({
     domainName,
     domainController,
-    computerName: ''
+    computerName: 'Auto-detect from system'
   })
   const [generatedCommand, setGeneratedCommand] = useState<string>('')
   const [isGenerating, setIsGenerating] = useState(false)
@@ -215,7 +215,7 @@ export default function ComputerDeploymentModal({
             )}
           </div>
 
-          {/* Configuration Form */}
+          {/* Configuration Summary */}
           {selectedScript && (
             <div>
               <h3 className="text-lg font-semibold mb-4">Configuration</h3>
@@ -224,32 +224,26 @@ export default function ComputerDeploymentModal({
                   <>
                     <div>
                       <label className="text-sm font-medium mb-2 block">Domain Name</label>
-                      <Input
-                        value={formData.domainName}
-                        onChange={(e) => setFormData({ ...formData, domainName: e.target.value })}
-                        placeholder="example.local"
-                      />
+                      <div className="p-3 bg-muted rounded-lg text-sm">
+                        {formData.domainName}
+                      </div>
                     </div>
                     {selectedScript === 'tailscale-domain' && (
                       <div>
                         <label className="text-sm font-medium mb-2 block">Domain Controller</label>
-                        <Input
-                          value={formData.domainController}
-                          onChange={(e) => setFormData({ ...formData, domainController: e.target.value })}
-                          placeholder="dc.example.local"
-                        />
+                        <div className="p-3 bg-muted rounded-lg text-sm">
+                          {formData.domainController}
+                        </div>
                       </div>
                     )}
                   </>
                 )}
 
                 <div>
-                  <label className="text-sm font-medium mb-2 block">Computer Name (Optional)</label>
-                  <Input
-                    value={formData.computerName}
-                    onChange={(e) => setFormData({ ...formData, computerName: e.target.value })}
-                    placeholder="Auto-detect from system"
-                  />
+                  <label className="text-sm font-medium mb-2 block">Computer Name</label>
+                  <div className="p-3 bg-muted rounded-lg text-sm">
+                    {formData.computerName}
+                  </div>
                 </div>
               </div>
 

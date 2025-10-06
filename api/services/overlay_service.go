@@ -166,21 +166,20 @@ func (s *OverlayService) configureHeadscale(fqdn string) error {
 		return fmt.Errorf("failed to get domain status: %v", err)
 	}
 
-	// Get the actual AD domain and extract the base domain for mesh
-	adDomain := ""
-	meshDomain := ""
+	// Get the actual AD domain and realm for DNS resolution
+	netbiosDomain := ""
+	realm := ""
 
 	if domainStatus != nil && domainStatus.Domain != "" && domainStatus.Domain != "PROVISIONED" {
-		adDomain = domainStatus.Domain
-		// Use first part of AD domain for mesh domain
-		meshDomain = strings.Split(adDomain, ".")[0]
+		netbiosDomain = domainStatus.Domain
+		realm = domainStatus.Realm
 	} else {
-		// Fallback to first part of FQDN if no AD domain found
-		meshDomain = strings.Split(fqdn, ".")[0]
-		adDomain = meshDomain // Use same as fallback
+		// This should not happen - domain should be provisioned first
+		return fmt.Errorf("domain not provisioned - cannot configure headscale without AD domain")
 	}
 
-	fmt.Printf("DEBUG: Using AD domain: %s, Mesh domain: %s, FQDN: %s\n", adDomain, meshDomain, fqdn)
+	fmt.Printf("DEBUG: Using NetBIOS domain: %s, Realm: %s, FQDN: %s\n", netbiosDomain, realm, fqdn)
+	fmt.Printf("DEBUG: Domain status: %+v\n", domainStatus)
 
 	// Create config and data directories
 	if err := os.MkdirAll("/etc/headscale", 0755); err != nil {
@@ -193,13 +192,7 @@ func (s *OverlayService) configureHeadscale(fqdn string) error {
 		return err
 	}
 
-	// Extract domain from FQDN for mesh domain (first part)
-	domain := strings.Split(fqdn, ".")[0]
-
-	// Get system DNS servers
-	systemDNS := s.getSystemDNSServers()
-
-	// Create config from template
+	// Create config from template - following working examples
 	tmpl := template.Must(template.New("config").Parse(`---
 # Vexa Mesh Configuration
 server_url: http://{{ .FQDN }}:50443
@@ -253,29 +246,26 @@ allow_netbios_broadcast: true
 
 dns:
   magic_dns: true
-  base_domain: {{ .MeshDomain }}.mesh
+  base_domain: {{ .NetBIOSDomain }}.mesh
   override_local_dns: true
   nameservers:
     global:
-      {{ range .SystemDNS }}- {{ . }}
-      {{ end }}
+      - 100.64.0.1
     split:
-      {{ .ADDomain }}:
-        - 100.64.0.1
-      {{ .MeshDomain }}.mesh:
+      {{ .Realm }}:
         - 100.64.0.1
   search_domains:
-    - {{ .ADDomain }}
-    - {{ .MeshDomain }}.mesh
-    - {{ .Domain }}
+    - {{ .Realm }}
+    - {{ .NetBIOSDomain }}.mesh
+    - {{ .NetBIOSDomain }}
   extra_records:
-    - name: "{{ .MeshDomain }}.mesh"
+    - name: "{{ .Realm }}"
       type: "A"
       value: "100.64.0.1"
-    - name: "{{ .ADDomain }}"
+    - name: "{{ .NetBIOSDomain }}"
       type: "A"
       value: "100.64.0.1"
-    - name: "dc-01.{{ .ADDomain }}"
+    - name: "dc.{{ .Realm }}"
       type: "A"
       value: "100.64.0.1"
 
@@ -292,17 +282,13 @@ randomize_client_port: false`))
 	defer f.Close()
 
 	data := struct {
-		FQDN       string
-		Domain     string
-		SystemDNS  []string
-		ADDomain   string
-		MeshDomain string
+		FQDN          string
+		NetBIOSDomain string
+		Realm         string
 	}{
-		FQDN:       fqdn,
-		Domain:     domain,
-		SystemDNS:  systemDNS,
-		ADDomain:   adDomain,
-		MeshDomain: meshDomain,
+		FQDN:          fqdn,
+		NetBIOSDomain: netbiosDomain,
+		Realm:         realm,
 	}
 
 	if err := tmpl.Execute(f, data); err != nil {
@@ -402,51 +388,6 @@ func (s *OverlayService) installTailscale() error {
 	cmd = exec.Command("apt", "install", "-y", "tailscale")
 	if err := cmd.Run(); err != nil {
 		return err
-	}
-
-	return nil
-}
-
-// joinMesh joins this server to the Headscale mesh
-func (s *OverlayService) joinMesh() error {
-	// Generate a pre-auth key for this server
-	cmd := exec.Command("headscale", "preauthkey", "create", "--reusable", "--expiration", "8760h")
-	output, err := cmd.Output()
-	if err != nil {
-		return fmt.Errorf("failed to create pre-auth key: %v", err)
-	}
-	authKey := strings.TrimSpace(string(output))
-
-	// Determine login server from headscale config/env if available
-	loginServer := os.Getenv("HEADSCALE_SERVER_URL")
-	if loginServer == "" {
-		if content, err := os.ReadFile("/etc/headscale/config.yaml"); err == nil {
-			lines := strings.Split(string(content), "\n")
-			for _, raw := range lines {
-				line := strings.TrimSpace(raw)
-				if strings.HasPrefix(line, "server_url:") {
-					val := strings.TrimSpace(strings.TrimPrefix(line, "server_url:"))
-					val = strings.Trim(val, "\"'")
-					loginServer = val
-					break
-				}
-			}
-		}
-	}
-	if loginServer == "" {
-		loginServer = "http://localhost:8080/mesh"
-	}
-
-	// Join mesh
-	cmd = exec.Command("tailscale", "up",
-		"--login-server="+loginServer,
-		"--authkey="+authKey,
-		"--accept-routes",
-		"--accept-dns=false",
-		"--hostname=vexa-server")
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to join mesh: %v", err)
 	}
 
 	return nil
@@ -763,6 +704,14 @@ func (s *OverlayService) GetOverlayStatus() (map[string]interface{}, error) {
 		status = "partial"
 	}
 
+	// Get the actual mesh domain from domain service
+	domainService := NewDomainService()
+	domainStatus, _ := domainService.GetDomainStatus()
+	meshDomain := "mesh"
+	if domainStatus != nil && domainStatus.Domain != "" && domainStatus.Domain != "PROVISIONED" {
+		meshDomain = domainStatus.Domain + ".mesh"
+	}
+
 	return map[string]interface{}{
 		"enabled":     headscaleActive && tailscaleActive,
 		"status":      status,
@@ -771,7 +720,7 @@ func (s *OverlayService) GetOverlayStatus() (map[string]interface{}, error) {
 		"ip":          ip,
 		"hostname":    hostname,
 		"fqdn":        fqdn,
-		"mesh_domain": "mesh",
+		"mesh_domain": meshDomain,
 		"server_ip":   "127.0.0.1", // Default server IP
 	}, nil
 }

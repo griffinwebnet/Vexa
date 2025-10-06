@@ -68,6 +68,13 @@ func (s *ComputerService) ListComputers() ([]models.Computer, error) {
 				computer.OverlayIP = overlayIP
 				computer.Online = true
 				computer.ConnectionType = "overlay"
+
+				// Generate overlay URL (hostname.domain.mesh)
+				domainService := NewDomainService()
+				domainStatus, _ := domainService.GetDomainStatus()
+				if domainStatus != nil && domainStatus.Domain != "" && domainStatus.Domain != "PROVISIONED" {
+					computer.OverlayURL = fmt.Sprintf("%s.%s.mesh", computer.Name, domainStatus.Domain)
+				}
 			}
 		}
 
@@ -97,6 +104,13 @@ func (s *ComputerService) ListComputers() ([]models.Computer, error) {
 				dcComputer.OverlayIP = overlayIP
 				dcComputer.Online = true
 				dcComputer.ConnectionType = "overlay"
+
+				// Generate overlay URL for DC
+				domainService := NewDomainService()
+				domainStatus, _ := domainService.GetDomainStatus()
+				if domainStatus != nil && domainStatus.Domain != "" && domainStatus.Domain != "PROVISIONED" {
+					dcComputer.OverlayURL = fmt.Sprintf("%s.%s.mesh", dcComputer.Name, domainStatus.Domain)
+				}
 			}
 
 			computers = append(computers, dcComputer)
