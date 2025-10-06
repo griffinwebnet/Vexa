@@ -112,49 +112,59 @@ func getDomainName() string {
 	return ""
 }
 
-// CheckDomainAdminStatus checks if a user is in the Domain Admins group
+// CheckDomainAdminStatus checks if a user is in admin groups (Domain Admins or Administrators)
 func CheckDomainAdminStatus(username string) bool {
-	fmt.Printf("DEBUG: Checking admin status for user: %s\n", username)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Get domain name
-	domainName := getDomainName()
-	if domainName == "" {
-		fmt.Printf("DEBUG: No domain name detected, cannot check admin status\n")
-		return false
-	}
+	// Check both "Domain Admins" and "Administrators" groups
+	adminGroups := []string{"Domain Admins", "Administrators"}
 
-	// Try multiple formats for the username
-	userFormats := []string{
-		username,
-		domainName + "\\" + username,
-		username + "@" + strings.ToLower(domainName) + ".local",
-	}
-
-	for _, userFormat := range userFormats {
-		fmt.Printf("DEBUG: Checking admin status for user format: %s\n", userFormat)
-
-		// Use samba-tool to check group membership
-		cmd := exec.CommandContext(ctx, "samba-tool", "group", "listmembers", "Domain Admins")
+	for _, group := range adminGroups {
+		// Method 1: Try using samba-tool with explicit path and environment
+		cmd := exec.CommandContext(ctx, "/usr/bin/samba-tool", "group", "listmembers", group)
+		cmd.Env = append(cmd.Env, "PATH=/usr/bin:/bin:/usr/sbin:/sbin")
 		output, err := cmd.Output()
-		if err != nil {
-			fmt.Printf("DEBUG: Failed to list Domain Admins: %v\n", err)
-			continue
+
+		if err == nil && len(output) > 0 {
+			members := strings.Split(string(output), "\n")
+			for _, member := range members {
+				member = strings.TrimSpace(member)
+				if member == username {
+					return true
+				}
+			}
 		}
 
-		members := strings.Split(string(output), "\n")
-		for _, member := range members {
-			member = strings.TrimSpace(member)
-			if member == userFormat || member == username {
-				fmt.Printf("DEBUG: User %s found in Domain Admins group\n", username)
-				return true
+		// Method 2: Try using net command as fallback
+		cmd2 := exec.CommandContext(ctx, "net", "group", "listmembers", group)
+		output2, err2 := cmd2.Output()
+
+		if err2 == nil && len(output2) > 0 {
+			members := strings.Split(string(output2), "\n")
+			for _, member := range members {
+				member = strings.TrimSpace(member)
+				if member == username {
+					return true
+				}
+			}
+		}
+
+		// Method 3: Try using wbinfo as last resort
+		cmd3 := exec.CommandContext(ctx, "wbinfo", "-g", group)
+		output3, err3 := cmd3.Output()
+
+		if err3 == nil && len(output3) > 0 {
+			// wbinfo -g shows group members in a different format
+			lines := strings.Split(string(output3), "\n")
+			for _, line := range lines {
+				if strings.Contains(line, username) {
+					return true
+				}
 			}
 		}
 	}
 
-	fmt.Printf("DEBUG: User %s is NOT in Domain Admins group\n", username)
 	return false
 }
 
