@@ -102,7 +102,7 @@ func (s *OverlayService) installHeadscale() error {
 
 	// Use a hardcoded version instead of relying on GitHub API
 	fmt.Printf("DEBUG: Using hardcoded headscale version\n")
-	version := "0.22.3" // Latest stable version as of October 2023
+	version := "0.26.1" // Update to latest stable version
 
 	fmt.Printf("DEBUG: Using headscale version: %s\n", version)
 
@@ -175,6 +175,7 @@ func (s *OverlayService) configureHeadscale(fqdn string) error {
 	}
 
 	fmt.Printf("DEBUG: Using AD domain: %s, Mesh domain: %s, FQDN: %s\n", adDomain, meshDomain, fqdn)
+
 	// Create config and data directories
 	if err := os.MkdirAll("/etc/headscale", 0755); err != nil {
 		return err
@@ -190,7 +191,6 @@ func (s *OverlayService) configureHeadscale(fqdn string) error {
 	domain := strings.Split(fqdn, ".")[0]
 
 	// Create config from template
-	// Use port 50443 for all Headscale communication
 	tmpl := template.Must(template.New("config").Parse(`---
 # Vexa Mesh Configuration
 server_url: http://{{ .FQDN }}:50443
@@ -239,7 +239,6 @@ policy:
   mode: file
   path: ""
 
-# Windows AD Integration
 enable_windows_networking: true
 allow_netbios_broadcast: true
 
@@ -301,8 +300,26 @@ randomize_client_port: false`))
 
 // startHeadscale starts and enables the Headscale service
 func (s *OverlayService) startHeadscale() error {
-	// Create systemd service
-	serviceFile := `[Unit]
+	// Find the actual headscale binary path
+	headscalePath, err := exec.LookPath("headscale")
+	if err != nil {
+		return fmt.Errorf("headscale binary not found: %v", err)
+	}
+
+	fmt.Printf("DEBUG: Found headscale binary at: %s\n", headscalePath)
+
+	// Initialize the database first
+	fmt.Printf("DEBUG: Initializing Headscale database\n")
+	initCmd := exec.Command(headscalePath, "migrate", "-c", "/etc/headscale/config.yaml")
+	initOutput, initErr := initCmd.CombinedOutput()
+	if initErr != nil {
+		fmt.Printf("DEBUG: Database migration output: %s\n", string(initOutput))
+		fmt.Printf("DEBUG: Database migration error: %v\n", initErr)
+		// Continue anyway - database might already be initialized
+	}
+
+	// Create systemd service with correct binary path
+	serviceFile := fmt.Sprintf(`[Unit]
 Description=Headscale Controller
 After=network.target
 
@@ -310,13 +327,14 @@ After=network.target
 Type=simple
 User=root
 Group=root
-ExecStart=/usr/local/bin/headscale serve -c /etc/headscale/config.yaml
+ExecStart=%s serve -c /etc/headscale/config.yaml
 Restart=always
 RestartSec=5
 Environment=HOME=/var/lib/headscale
+Environment=HEADSCALE_CONFIG=/etc/headscale/config.yaml
 
 [Install]
-WantedBy=multi-user.target`
+WantedBy=multi-user.target`, headscalePath)
 
 	if err := os.WriteFile("/etc/systemd/system/headscale.service", []byte(serviceFile), 0644); err != nil {
 		return err
@@ -326,6 +344,9 @@ WantedBy=multi-user.target`
 	if err := exec.Command("systemctl", "daemon-reload").Run(); err != nil {
 		return err
 	}
+
+	// Stop any existing service first
+	exec.Command("systemctl", "stop", "headscale").Run()
 
 	// Start and enable service
 	if err := exec.Command("systemctl", "enable", "--now", "headscale").Run(); err != nil {
@@ -424,19 +445,32 @@ func (s *OverlayService) joinMeshLocal(fqdn string, meshDomain string) error {
 		fmt.Printf("DEBUG: Headscale start error: %v\n", startErr)
 	}
 
-	// Wait longer for headscale to fully start
+	// Wait longer for headscale to fully start with better health checking
 	fmt.Printf("DEBUG: Waiting for headscale to fully start...\n")
-	time.Sleep(10 * time.Second) // Increase wait time
+	time.Sleep(10 * time.Second)
 
 	// Add health check loop
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 15; i++ {
 		statusCmd := exec.Command("systemctl", "is-active", "headscale")
 		statusOutput, statusErr := statusCmd.Output()
 		if statusErr == nil && strings.TrimSpace(string(statusOutput)) == "active" {
 			fmt.Printf("DEBUG: Headscale is active after %d attempts\n", i+1)
 			break
 		}
-		fmt.Printf("DEBUG: Headscale not ready, attempt %d/10\n", i+1)
+		fmt.Printf("DEBUG: Headscale not ready, attempt %d/15\n", i+1)
+		time.Sleep(3 * time.Second)
+	}
+
+	// Additional check - test if headscale CLI can connect
+	fmt.Printf("DEBUG: Testing Headscale CLI connectivity\n")
+	for i := 0; i < 10; i++ {
+		testCmd := exec.Command("headscale", "users", "list", "-c", "/etc/headscale/config.yaml")
+		_, testErr := testCmd.CombinedOutput()
+		if testErr == nil {
+			fmt.Printf("DEBUG: Headscale CLI is responsive after %d attempts\n", i+1)
+			break
+		}
+		fmt.Printf("DEBUG: Headscale CLI not responsive, attempt %d/10: %v\n", i+1, testErr)
 		time.Sleep(2 * time.Second)
 	}
 
@@ -450,7 +484,7 @@ func (s *OverlayService) joinMeshLocal(fqdn string, meshDomain string) error {
 
 	// Create a user called 'infrastructure'
 	fmt.Printf("DEBUG: Creating infrastructure user\n")
-	userCmd := exec.Command("headscale", "users", "create", "infrastructure")
+	userCmd := exec.Command("headscale", "users", "create", "infrastructure", "-c", "/etc/headscale/config.yaml")
 	userOutput, userErr := userCmd.CombinedOutput()
 	if userErr != nil {
 		// If it fails because the user already exists, that's fine
@@ -460,8 +494,7 @@ func (s *OverlayService) joinMeshLocal(fqdn string, meshDomain string) error {
 
 	// Generate a pre-auth key for this server
 	fmt.Printf("DEBUG: Creating pre-auth key for infrastructure user\n")
-	cmd := exec.Command("headscale", "preauthkeys", "create", "--reusable", "--expiration", "131400h", "-u", "infrastructure")
-	cmd.Env = append(cmd.Env, "HEADSCALE_CONFIG=/etc/headscale/config.yaml") // Explicitly set config path
+	cmd := exec.Command("headscale", "preauthkeys", "create", "--reusable", "--expiration", "131400h", "-u", "infrastructure", "-c", "/etc/headscale/config.yaml")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// Add more detailed error information
@@ -472,6 +505,11 @@ func (s *OverlayService) joinMeshLocal(fqdn string, meshDomain string) error {
 		statusCmd := exec.Command("systemctl", "status", "headscale")
 		statusOutput, _ := statusCmd.CombinedOutput()
 		fmt.Printf("DEBUG: Headscale service status: %s\n", string(statusOutput))
+
+		// Try to get more detailed logs
+		logCmd := exec.Command("journalctl", "-u", "headscale", "--no-pager", "-n", "20")
+		logOutput, _ := logCmd.CombinedOutput()
+		fmt.Printf("DEBUG: Recent Headscale logs: %s\n", string(logOutput))
 
 		return fmt.Errorf("failed to create pre-auth key: %v, output: %s", err, string(output))
 	}
