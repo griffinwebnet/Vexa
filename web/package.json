@@ -1,7 +1,7 @@
 {
   "name": "vexa-web",
   "private": true,
-  "version": "0.3.114",
+  "version": "0.3.115",
   "type": "module",
   "scripts": {
     "dev": "vite",
