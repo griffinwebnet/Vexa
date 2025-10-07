@@ -9,7 +9,6 @@ import (
 // AuthenticatePAM authenticates against system PAM authentication
 func AuthenticatePAM(username, password string) bool {
 	// Use pamtester to test PAM authentication
-	// This requires pamtester to be installed: sudo apt-get install libpam0g-dev pamtester
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -32,6 +31,7 @@ func AuthenticateSAMBA(username, password string) bool {
 	defer cancel()
 
 	// Method 1: Try simple smbclient first (most reliable for basic auth)
+	// method replaces earlier fallback smb method deleted as of 0.3.116
 	cmd, err := SafeCommandContext(ctx, "smbclient", "//localhost/ipc$", "-U", username+"%"+password, "-c", "exit")
 	if err != nil {
 		Error("Command sanitization failed for smbclient: %v", err)
@@ -46,6 +46,8 @@ func AuthenticateSAMBA(username, password string) bool {
 	}
 
 	// Method 2: Try with netlogon share
+	// may be deleted later. I've yet to see it dump its debug string to the
+	// log so the primary funciton seems to be sufficient.
 	Debug("Trying smbclient //localhost/netlogon with user %s", username)
 	cmd2, err := SafeCommandContext(ctx, "smbclient", "//localhost/netlogon", "-U", username+"%"+password, "-c", "exit")
 	if err != nil {
@@ -61,6 +63,8 @@ func AuthenticateSAMBA(username, password string) bool {
 	}
 
 	// Method 3: Get domain name and try domain-prefixed authentication
+	// 50/50 This gets deleted later. I've yet to see it dump its debug string to the
+	// log so the primary funciton seems to be sufficient.
 	domainName := getDomainName()
 	Debug("Detected domain name: %s", domainName)
 
@@ -138,7 +142,7 @@ func CheckDomainAdminStatus(username string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Only use samba-tool - the most reliable method
+	// Only use samba-tool... after MUCH testing, it is the most reliable method
 	// Check both "Domain Admins" and "Administrators" groups
 	adminGroups := []string{"Domain Admins", "Administrators"}
 
@@ -164,7 +168,7 @@ func CheckDomainAdminStatus(username string) bool {
 	return false
 }
 
-// VerifyCurrentPassword verifies a user's current password directly against Samba
+// VerifyCurrentPassword verifies a user's current password directly against the Samba domain
 func VerifyCurrentPassword(username, password string) bool {
 	Debug("VerifyCurrentPassword called for user: %s", username)
 	Debug("Verifying current password for user: %s", username)
@@ -213,155 +217,13 @@ func VerifyCurrentPassword(username, password string) bool {
 	return false
 }
 
-// tryKerberosAuth attempts Kerberos authentication
-func tryKerberosAuth(username, password, domainName string) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	realm := strings.ToUpper(domainName) + ".LOCAL"
-
-	// Try kinit with password
-	cmd, err := SafeCommandContext(ctx, "kinit", username+"@"+realm)
-	if err != nil {
-		Debug("Command sanitization failed for kinit: %v", err)
-		return false
-	}
-	cmd.Stdin = strings.NewReader(password + "\n")
-
-	err2 := cmd.Run()
-	if err2 == nil {
-		// Clean up the ticket
-		cmd, err := SafeCommand("kdestroy")
-		if err == nil {
-			cmd.Run()
-		}
-		return true
-	}
-
-	Debug("kinit failed: %v", err2)
-	return false
-}
-
-// tryWbinfoAuth attempts authentication using wbinfo
-func tryWbinfoAuth(username, password, domainName string) bool {
-	if domainName == "" {
-		return false
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// Try with domain prefix
-	fullUser := domainName + "\\" + username
-	Debug("Trying wbinfo authentication for %s\n", fullUser)
-
-	cmd, err := SafeCommandContext(ctx, "wbinfo", "--authenticate", fullUser+"%"+password)
-	if err != nil {
-		Debug("Command sanitization failed for wbinfo: %v", err)
-		return false
-	}
-	err2 := cmd.Run()
-	if err2 == nil {
-		return true
-	}
-
-	Debug("wbinfo authentication failed: %v", err2)
-	return false
-}
-
-// tryNtlmAuth attempts authentication using ntlm_auth
-func tryNtlmAuth(username, password, domainName string) bool {
-	if domainName == "" {
-		return false
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// Try ntlm_auth
-	Debug("Trying ntlm_auth for %s\n", username)
-
-	cmd, err := SafeCommandContext(ctx, "ntlm_auth", "--username="+username, "--password="+password, "--domain="+domainName)
-	if err != nil {
-		Debug("Command sanitization failed for ntlm_auth: %v", err)
-		return false
-	}
-	output, err2 := cmd.Output()
-
-	if err2 == nil && strings.Contains(string(output), "NT_STATUS_OK") {
-		Debug("ntlm_auth successful")
-		return true
-	}
-
-	Debug("ntlm_auth failed: %v, output: %s", err2, string(output))
-	return false
-}
-
-// trySmbclientAuth attempts authentication using smbclient
-func trySmbclientAuth(username, password, domainName string, ctx context.Context) bool {
-	// Try multiple authentication methods for domain users
-	targets := []string{
-		"//localhost/netlogon",
-		"//localhost/ipc$",
-	}
-
-	// Try without domain prefix first
-	for _, target := range targets {
-		Debug("Trying smbclient %s with user %s\n", target, username)
-		cmd, err := SafeCommandContext(ctx, "smbclient", target, "-U", username+"%"+password, "-c", "exit")
-		if err != nil {
-			Debug("Command sanitization failed for smbclient: %v", err)
-		} else {
-			err2 := cmd.Run()
-			if err2 == nil {
-				Debug("smbclient authentication successful for %s", username)
-				return true
-			}
-		}
-		Debug("smbclient failed for %s", target)
-	}
-
-	// Try with domain prefix if username doesn't already have it
-	if !strings.Contains(username, "\\") && !strings.Contains(username, "@") && domainName != "" {
-		Debug("Trying smbclient with domain prefix %s\\%s", domainName, username)
-		cmd, err := SafeCommandContext(ctx, "smbclient", "//localhost/netlogon", "-U", domainName+"\\"+username+"%"+password, "-c", "exit")
-		if err != nil {
-			Debug("Command sanitization failed for smbclient netlogon: %v", err)
-			return false
-		}
-		err2 := cmd.Run()
-		if err2 == nil {
-			Debug("smbclient authentication successful for %s\\%s", domainName, username)
-			return true
-		}
-		Debug("smbclient with domain prefix failed: %v", err2)
-	}
-
-	// Try with realm format
-	if domainName != "" {
-		realm := strings.ToLower(domainName) + ".local"
-		Debug("Trying smbclient with realm format %s@%s\n", username, realm)
-		cmd, err := SafeCommandContext(ctx, "smbclient", "//localhost/netlogon", "-U", username+"@"+realm+"%"+password, "-c", "exit")
-		if err != nil {
-			Debug("Command sanitization failed for smbclient realm: %v", err)
-			return false
-		}
-		err2 := cmd.Run()
-		if err2 == nil {
-			Debug("smbclient authentication successful for %s@%s", username, realm)
-			return true
-		}
-		Debug("smbclient with realm format failed: %v", err2)
-	}
-
-	return false
-}
-
 // CheckLocalAdminStatus determines if a local (PAM) user is an administrator
 // by checking common sudo-capable groups and root. This is used to allow
-// bootstrap by local admins on unprovisioned systems.
+// bootstrap by local admins on unprovisioned systems or fallback access should
+// the domain authentication fail or domain servives are damaged.
 func CheckLocalAdminStatus(username string) bool {
 	if username == "root" {
+		// ta-da! this was the hardest part of the whole project :P
 		return true
 	}
 
@@ -388,6 +250,9 @@ func CheckLocalAdminStatus(username string) bool {
 	}
 
 	// Fallback: check getent for standard admin groups membership
+	// this may get deleted later. its not entirely necessary and I
+	// am not sure it actually ever runs. I've yet to see it dump its
+	// debug string to the log so the primary funciton seems to be sufficient.
 	adminGroups := []string{"sudo", "wheel", "admin"}
 	for _, grp := range adminGroups {
 		ctx2, cancel2 := context.WithTimeout(context.Background(), 2*time.Second)

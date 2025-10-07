@@ -88,14 +88,12 @@ func (s *HeadscaleService) GetInfrastructureKey() (string, error) {
 		return "", fmt.Errorf("failed to parse pre-auth keys: %v", err)
 	}
 
-	// Find the first reusable, non-expired key
+	// Find the first reusable key
 	for _, key := range keys {
 		if reusable, ok := key["reusable"].(bool); ok && reusable {
-			// Check if key is not expired
-			if expired, ok := key["expired"].(bool); ok && !expired {
-				if keyStr, ok := key["key"].(string); ok && keyStr != "" {
-					return keyStr, nil
-				}
+			// Reusable keys don't expire, so just return the key string
+			if keyStr, ok := key["key"].(string); ok && keyStr != "" {
+				return keyStr, nil
 			}
 		}
 	}

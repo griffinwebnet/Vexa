@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-// LogLevel represents the logging level
+// LogLevel represents the logging level... captain obvious here but I know some will be surprised...
 type LogLevel int
 
 const (
@@ -92,14 +92,8 @@ func InitLogger() error {
 	return InitLoggerWithConfig(defaultConfig, true)
 }
 
-// GetLogDirectory returns the appropriate log directory for the platform
+// GetLogDirectory returns the appropriate log directory to all functions that need it
 func GetLogDirectory() string {
-	// Check if we're on Windows
-	if os.PathSeparator == '\\' {
-		// Windows development - use local logs directory
-		return "./logs"
-	}
-	// Linux production - use system logs directory
 	return "/var/log/vexa"
 }
 
@@ -119,7 +113,11 @@ func InitLoggerWithConfig(config LogRotationConfig, verbose bool) error {
 		verbose: verbose,
 	}
 
-	// Initialize individual log files
+	// Initialize individual log files...
+	// logs issues using fmt.Errorf directly so that a failed initalization
+	// will dump the error to stdout/stderr which captures to journalctl
+	// this way the service doesnt just fail out silently without
+	// logging the failure anywhere.
 	var err error
 	logger.debugLog, err = newLogFile(filepath.Join(logDir, "debug.log"), config)
 	if err != nil {
@@ -146,7 +144,7 @@ func InitLoggerWithConfig(config LogRotationConfig, verbose bool) error {
 		return fmt.Errorf("failed to create audit log: %v", err)
 	}
 
-	// Create combined vexa.log file
+	// Create combined vexa.log file for general log viewing
 	logger.vexaLog, err = newLogFile(filepath.Join(logDir, "vexa.log"), config)
 	if err != nil {
 		return fmt.Errorf("failed to create vexa log: %v", err)
@@ -154,7 +152,7 @@ func InitLoggerWithConfig(config LogRotationConfig, verbose bool) error {
 
 	globalLogger = logger
 
-	// Log startup message
+	// Log startup message to the log files
 	logger.Info("Vexa logging system initialized with rotation enabled")
 	logger.Info("Log directory: %s", logDir)
 	logger.Info("Max file size: %d bytes", config.MaxSize)
@@ -296,11 +294,7 @@ func (lf *LogFile) rotateFiles() error {
 		}
 
 		newPath := filepath.Join(dir, fmt.Sprintf("%s.%d", baseName, currentNum+1))
-
-		// If the next file exists and is compressed, decompress it first
-		if strings.HasSuffix(newPath, ".tar.gz") {
-			newPath = strings.TrimSuffix(newPath, ".tar.gz")
-		}
+		newPath = strings.TrimSuffix(newPath, ".tar.gz")
 
 		// Move the file
 		if err := os.Rename(rotatedFiles[i], newPath); err != nil {
