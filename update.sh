@@ -6,6 +6,11 @@ echo "======================================"
 echo "  Vexa Update Script  v0.2.99"
 echo "======================================"
 echo ""
+echo "Usage: $0 [--nightly] [--fast]"
+echo "  --nightly  Update to main branch (development)"
+echo "  --fast     Skip npm cache clean and dependency reinstall"
+echo "  --help     Show this help message"
+echo ""
 
 # Color codes
 RED='\033[0;31m'
@@ -15,9 +20,40 @@ NC='\033[0m'
 
 # Parse command line arguments
 NIGHTLY=false
-if [ "$1" == "--nightly" ]; then
-    NIGHTLY=true
-    echo -e "${YELLOW}NIGHTLY MODE: Updating to main branch${NC}"
+FAST=false
+
+for arg in "$@"; do
+    case $arg in
+        --nightly)
+            NIGHTLY=true
+            echo -e "${YELLOW}NIGHTLY MODE: Updating to main branch${NC}"
+            ;;
+        --fast)
+            FAST=true
+            echo -e "${YELLOW}FAST MODE: Skipping npm cache clean and dependency reinstall${NC}"
+            ;;
+        --help)
+            echo "Vexa Update Script"
+            echo ""
+            echo "Usage: $0 [--nightly] [--fast]"
+            echo ""
+            echo "Options:"
+            echo "  --nightly  Update to main branch (development version)"
+            echo "  --fast     Skip npm cache clean and dependency reinstall for faster builds"
+            echo "  --help     Show this help message"
+            echo ""
+            echo "Examples:"
+            echo "  $0                    # Update to latest stable release"
+            echo "  $0 --nightly          # Update to main branch"
+            echo "  $0 --fast             # Fast update (skip npm clean)"
+            echo "  $0 --nightly --fast   # Fast nightly update"
+            echo ""
+            exit 0
+            ;;
+    esac
+done
+
+if [ "$NIGHTLY" = true ] || [ "$FAST" = true ]; then
     echo ""
 fi
 
@@ -115,14 +151,33 @@ echo -e "${GREEN}API built${NC}"
 echo -e "${YELLOW}Building web interface...${NC}"
 cd /tmp/Vexa/web
 
-# Clean npm cache and dependencies to fix rollup module issues
-echo -e "${YELLOW}Cleaning npm dependencies...${NC}"
-rm -rf node_modules package-lock.json
-npm cache clean --force
-
-# Install dependencies
-echo -e "${YELLOW}Installing dependencies...${NC}"
-npm install
+if [ "$FAST" = false ]; then
+    # Full clean build - clean npm cache and dependencies to fix rollup module issues
+    echo -e "${YELLOW}Cleaning npm dependencies...${NC}"
+    rm -rf node_modules package-lock.json
+    npm cache clean --force
+    
+    # Install dependencies
+    echo -e "${YELLOW}Installing dependencies...${NC}"
+    npm install
+else
+    # Fast build - check if dependencies need updating
+    if [ ! -d "node_modules" ]; then
+        echo -e "${YELLOW}Installing dependencies (node_modules missing)...${NC}"
+        npm install
+    elif [ -f "package-lock.json" ] && [ -f "/var/www/vexa/web/package-lock.json" ]; then
+        # Check if package-lock.json has changed
+        if ! cmp -s "package-lock.json" "/var/www/vexa/web/package-lock.json"; then
+            echo -e "${YELLOW}Dependencies changed, reinstalling...${NC}"
+            rm -rf node_modules
+            npm install
+        else
+            echo -e "${YELLOW}Skipping dependency install (no changes detected)${NC}"
+        fi
+    else
+        echo -e "${YELLOW}Skipping dependency install (using existing node_modules)${NC}"
+    fi
+fi
 
 # Build the frontend
 echo -e "${YELLOW}Building frontend...${NC}"
@@ -133,6 +188,15 @@ echo -e "${YELLOW}Updating web files...${NC}"
 rm -rf /var/www/vexa/web/dist
 mkdir -p /var/www/vexa/web
 cp -r dist /var/www/vexa/web/
+
+# Preserve package files for future dependency comparison
+if [ -f "package.json" ]; then
+    cp package.json /var/www/vexa/web/
+fi
+if [ -f "package-lock.json" ]; then
+    cp package-lock.json /var/www/vexa/web/
+fi
+
 echo -e "${GREEN}Frontend updated${NC}"
 
 # Copy updated API source (for WorkingDirectory in systemd)
@@ -157,6 +221,7 @@ echo "  Update Complete!"
 echo "======================================${NC}"
 echo ""
 echo "Vexa version: $CURRENT_VERSION"
+echo "Build mode: $([ "$FAST" = true ] && echo "FAST (skipped npm clean)" || echo "FULL (clean build)")"
 echo "Running at: http://$(hostname -I | awk '{print $1}')"
 echo ""
 echo "Services restarted:"
