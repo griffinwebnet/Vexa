@@ -144,6 +144,11 @@ function App() {
                 <Computers />
               </AdminRoute>
             } />
+            <Route path="machines/:id" element={
+              <AdminRoute>
+                <MachineDetails />
+              </AdminRoute>
+            } />
             <Route path="dns" element={
               <AdminRoute>
                 <DNS />

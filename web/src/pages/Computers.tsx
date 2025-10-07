@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Monitor, Wifi, Network, Circle, Plus } from 'lucide-react'
@@ -22,6 +23,7 @@ interface Computer {
 
 export default function Computers() {
   const [isDeploymentModalOpen, setIsDeploymentModalOpen] = useState(false)
+  const navigate = useNavigate()
 
   const { data: computersData, isLoading } = useQuery({
     queryKey: ['computers'],
@@ -126,7 +128,8 @@ export default function Computers() {
               {computersData.computers.map((computer: Computer) => (
                 <div
                   key={computer.name}
-                  className="flex items-center justify-between p-4 rounded-lg border hover:bg-accent"
+                  className="flex items-center justify-between p-4 rounded-lg border hover:bg-accent cursor-pointer"
+                  onClick={() => navigate(`/machines/${computer.name}`)}
                 >
                   <div className="flex items-center gap-4">
                     {getStatusDot(computer)}

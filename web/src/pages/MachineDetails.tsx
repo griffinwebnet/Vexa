@@ -11,7 +11,6 @@ import {
   User,
   Calendar,
   Key,
-  Globe,
   Network,
   Activity
 } from 'lucide-react'
@@ -67,14 +66,6 @@ export default function MachineDetails() {
     }
   }
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'online': return 'Connected'
-      case 'offline': return 'Offline'
-      case 'expired': return 'Expired'
-      default: return 'Unknown'
-    }
-  }
 
   if (isLoading) {
     return (
