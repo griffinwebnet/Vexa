@@ -25,55 +25,69 @@ func NewComputerService() *ComputerService {
 // ListComputers returns all computers/devices in the domain with connection status
 func (s *ComputerService) ListComputers() ([]models.Computer, error) {
 
+	// Get domain computers from Samba
 	output, err := s.sambaTool.Run("computer", "list")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list computers: %s", output)
 	}
 
 	computerNames := strings.Split(strings.TrimSpace(output), "\n")
+	domainComputers := make(map[string]bool) // Track which computers are domain-joined
+
+	// Build list of domain computers
+	for _, name := range computerNames {
+		if name != "" {
+			cleanName := strings.TrimSuffix(name, "$")
+			domainComputers[cleanName] = true
+		}
+	}
+
+	// Get Tailscale nodes if Headscale is enabled
+	var tailscaleNodes map[string]map[string]interface{}
+	if s.isHeadscaleEnabled() {
+		tailscaleNodes = s.getTailscaleNodes()
+	}
+
 	computers := make([]models.Computer, 0)
 
-	// Check if Headscale is enabled
-	headscaleEnabled := s.isHeadscaleEnabled()
-
-	// Get domain controller hostname
-	dcHostname := s.getDomainControllerHostname()
-
+	// Process domain computers
 	for _, name := range computerNames {
 		if name == "" {
 			continue
 		}
 
+		cleanName := strings.TrimSuffix(name, "$")
 		computer := models.Computer{
-			Name:           strings.TrimSuffix(name, "$"),
+			Name:           cleanName,
 			DNSName:        name,
 			Online:         false,
 			ConnectionType: "offline",
 		}
 
-		// Try to ping the computer to check if online
-		if s.pingComputer(computer.Name) {
+		// Check local connectivity
+		if s.pingComputer(cleanName) {
 			computer.Online = true
 			computer.ConnectionType = "local"
-
-			// Try to get IP address
-			if ip := s.getComputerIP(computer.Name); ip != "" {
+			if ip := s.getComputerIP(cleanName); ip != "" {
 				computer.IPAddress = ip
 			}
 		}
 
-		// If Headscale is enabled, check overlay connection
-		if headscaleEnabled {
-			if overlayIP := s.getHeadscaleIP(computer.Name); overlayIP != "" {
-				computer.OverlayIP = overlayIP
-				computer.Online = true
-				computer.ConnectionType = "overlay"
+		// Check Tailscale connectivity
+		if tailscaleNodes != nil {
+			if node, exists := tailscaleNodes[cleanName]; exists {
+				// Found in Tailscale - get overlay IP and URL
+				if ip := s.extractIPFromNode(node); ip != "" {
+					computer.OverlayIP = ip
+					computer.Online = true
+					computer.ConnectionType = "overlay"
 
-				// Generate overlay URL (hostname.domain.mesh)
-				domainService := NewDomainService()
-				domainStatus, _ := domainService.GetDomainStatus()
-				if domainStatus != nil && domainStatus.Domain != "" && domainStatus.Domain != "PROVISIONED" {
-					computer.OverlayURL = fmt.Sprintf("%s.%s.mesh", computer.Name, domainStatus.Domain)
+					// Generate overlay URL
+					domainService := NewDomainService()
+					domainStatus, _ := domainService.GetDomainStatus()
+					if domainStatus != nil && domainStatus.Domain != "" && domainStatus.Domain != "PROVISIONED" {
+						computer.OverlayURL = fmt.Sprintf("%s.%s.mesh", cleanName, domainStatus.Domain)
+					}
 				}
 			}
 		}
@@ -81,39 +95,34 @@ func (s *ComputerService) ListComputers() ([]models.Computer, error) {
 		computers = append(computers, computer)
 	}
 
-	// Add domain controller if it's not already in the list and Headscale is enabled
-	if headscaleEnabled && dcHostname != "" {
-		dcExists := false
-		for _, comp := range computers {
-			if comp.Name == dcHostname || comp.Name == strings.TrimSuffix(dcHostname, "$") {
-				dcExists = true
-				break
-			}
-		}
-
-		if !dcExists {
-			dcComputer := models.Computer{
-				Name:           strings.TrimSuffix(dcHostname, "$"),
-				DNSName:        dcHostname,
-				Online:         false,
-				ConnectionType: "offline",
+	// Add Tailscale-only nodes (not domain-joined)
+	if tailscaleNodes != nil {
+		for nodeName, node := range tailscaleNodes {
+			// Skip if already in domain computers list
+			if domainComputers[nodeName] {
+				continue
 			}
 
-			// Check if DC is online via overlay
-			if overlayIP := s.getHeadscaleIP(dcHostname); overlayIP != "" {
-				dcComputer.OverlayIP = overlayIP
-				dcComputer.Online = true
-				dcComputer.ConnectionType = "overlay"
-
-				// Generate overlay URL for DC
-				domainService := NewDomainService()
-				domainStatus, _ := domainService.GetDomainStatus()
-				if domainStatus != nil && domainStatus.Domain != "" && domainStatus.Domain != "PROVISIONED" {
-					dcComputer.OverlayURL = fmt.Sprintf("%s.%s.mesh", dcComputer.Name, domainStatus.Domain)
-				}
+			// This is a Tailscale-only node (like a NAS, etc.)
+			computer := models.Computer{
+				Name:           nodeName,
+				DNSName:        nodeName,
+				Online:         true,
+				ConnectionType: "overlay",
 			}
 
-			computers = append(computers, dcComputer)
+			if ip := s.extractIPFromNode(node); ip != "" {
+				computer.OverlayIP = ip
+			}
+
+			// Generate overlay URL
+			domainService := NewDomainService()
+			domainStatus, _ := domainService.GetDomainStatus()
+			if domainStatus != nil && domainStatus.Domain != "" && domainStatus.Domain != "PROVISIONED" {
+				computer.OverlayURL = fmt.Sprintf("%s.%s.mesh", nodeName, domainStatus.Domain)
+			}
+
+			computers = append(computers, computer)
 		}
 	}
 
@@ -131,6 +140,8 @@ func (s *ComputerService) GetComputer(computerName string) (*models.Computer, er
 
 // GetMachineDetails returns detailed information about a machine from Headscale
 func (s *ComputerService) GetMachineDetails(machineId string) (map[string]interface{}, error) {
+	fmt.Printf("DEBUG: Looking for machine: %s\n", machineId)
+
 	// Query Headscale for machine details
 	cmd := exec.Command("headscale", "nodes", "list", "--output", "json")
 	output, err := cmd.Output()
@@ -144,12 +155,45 @@ func (s *ComputerService) GetMachineDetails(machineId string) (map[string]interf
 		return nil, fmt.Errorf("failed to parse headscale output: %v", err)
 	}
 
+	fmt.Printf("DEBUG: Found %d nodes in Headscale\n", len(nodes))
+
 	// Find the machine by ID or name
-	for _, node := range nodes {
-		if nodeID, ok := node["id"].(string); ok && nodeID == machineId {
+	for i, node := range nodes {
+		nodeName := "unknown"
+		nodeID := "unknown"
+
+		if name, ok := node["name"].(string); ok {
+			nodeName = name
+		}
+		if id, ok := node["id"].(float64); ok {
+			nodeID = fmt.Sprintf("%.0f", id)
+		}
+
+		fmt.Printf("DEBUG: Node %d: ID=%s, Name=%s\n", i, nodeID, nodeName)
+
+		// Check by ID (convert float64 to string)
+		if nodeID, ok := node["id"].(float64); ok {
+			if fmt.Sprintf("%.0f", nodeID) == machineId {
+				fmt.Printf("DEBUG: Found machine by ID match\n")
+				return s.formatMachineDetails(node)
+			}
+		}
+
+		// Check by name (exact match)
+		if nodeName, ok := node["name"].(string); ok && nodeName == machineId {
+			fmt.Printf("DEBUG: Found machine by exact name match\n")
 			return s.formatMachineDetails(node)
 		}
-		if nodeName, ok := node["name"].(string); ok && nodeName == machineId {
+
+		// Check by name with $ suffix (for domain computers)
+		if nodeName, ok := node["name"].(string); ok && nodeName == machineId+"$" {
+			fmt.Printf("DEBUG: Found machine by name with $ suffix match\n")
+			return s.formatMachineDetails(node)
+		}
+
+		// Check by name without $ suffix
+		if nodeName, ok := node["name"].(string); ok && strings.TrimSuffix(nodeName, "$") == machineId {
+			fmt.Printf("DEBUG: Found machine by name without $ suffix match\n")
 			return s.formatMachineDetails(node)
 		}
 	}
@@ -162,10 +206,10 @@ func (s *ComputerService) formatMachineDetails(node map[string]interface{}) (map
 	// Extract basic info
 	id := fmt.Sprintf("%.0f", node["id"].(float64))
 	name := node["name"].(string)
-	
+
 	// Get IP addresses
 	var ipv4, ipv6 string
-	if addrs, ok := node["ipAddresses"].([]interface{}); ok {
+	if addrs, ok := node["ip_addresses"].([]interface{}); ok {
 		for _, addr := range addrs {
 			if addrStr, ok := addr.(string); ok {
 				if strings.Contains(addrStr, ":") {
@@ -206,19 +250,19 @@ func (s *ComputerService) formatMachineDetails(node map[string]interface{}) (map
 	}
 
 	return map[string]interface{}{
-		"id":             id,
-		"name":           name,
-		"hostname":       name,
-		"creator":        "infrastructure",
-		"created":        created,
-		"lastSeen":       lastSeen,
-		"keyExpiry":      keyExpiry,
-		"nodeKey":        nodeKey,
-		"tailscaleIPv4":  ipv4,
-		"tailscaleIPv6":  ipv6,
-		"shortDomain":    name,
-		"status":         status,
-		"managedBy":      "infrastructure",
+		"id":            id,
+		"name":          name,
+		"hostname":      name,
+		"creator":       "infrastructure",
+		"created":       created,
+		"lastSeen":      lastSeen,
+		"keyExpiry":     keyExpiry,
+		"nodeKey":       nodeKey,
+		"tailscaleIPv4": ipv4,
+		"tailscaleIPv6": ipv6,
+		"shortDomain":   name,
+		"status":        status,
+		"managedBy":     "infrastructure",
 	}, nil
 }
 
@@ -309,10 +353,23 @@ func (s *ComputerService) getHeadscaleIP(hostname string) string {
 			// Check if hostname matches (with or without $ suffix)
 			if nodeHostname == hostname || nodeHostname == hostname+"$" ||
 				strings.TrimSuffix(nodeHostname, "$") == hostname {
+
+				// Try to get IP from ip_addresses array (Headscale uses underscore)
+				if ipAddresses, ok := node["ip_addresses"].([]interface{}); ok {
+					for _, addr := range ipAddresses {
+						if addrStr, ok := addr.(string); ok {
+							// Return first IPv4 address (not IPv6)
+							if !strings.Contains(addrStr, ":") {
+								return addrStr
+							}
+						}
+					}
+				}
+
+				// Fallback to direct IP fields
 				if ipv4, ok := node["ipv4"].(string); ok && ipv4 != "" {
 					return ipv4
 				}
-				// Try alternative IP field names
 				if ip, ok := node["ip"].(string); ok && ip != "" {
 					return ip
 				}
@@ -330,4 +387,42 @@ func (s *ComputerService) getDomainControllerHostname() string {
 		return ""
 	}
 	return strings.TrimSpace(string(output))
+}
+
+// getTailscaleNodes returns a map of node names to their data from Headscale
+func (s *ComputerService) getTailscaleNodes() map[string]map[string]interface{} {
+	cmd := exec.Command("headscale", "nodes", "list", "--output", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+
+	var nodes []map[string]interface{}
+	if err := json.Unmarshal(output, &nodes); err != nil {
+		return nil
+	}
+
+	nodeMap := make(map[string]map[string]interface{})
+	for _, node := range nodes {
+		if nodeName, ok := node["name"].(string); ok {
+			cleanName := strings.TrimSuffix(nodeName, "$")
+			nodeMap[cleanName] = node
+		}
+	}
+	return nodeMap
+}
+
+// extractIPFromNode extracts the first IPv4 address from a Headscale node
+func (s *ComputerService) extractIPFromNode(node map[string]interface{}) string {
+	if ipAddresses, ok := node["ip_addresses"].([]interface{}); ok {
+		for _, addr := range ipAddresses {
+			if addrStr, ok := addr.(string); ok {
+				// Return first IPv4 address (not IPv6)
+				if !strings.Contains(addrStr, ":") {
+					return addrStr
+				}
+			}
+		}
+	}
+	return ""
 }
