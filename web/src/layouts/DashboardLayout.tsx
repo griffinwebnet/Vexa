@@ -15,6 +15,7 @@ import {
   FolderTree,
   User,
   Network,
+  Shield,
 } from 'lucide-react'
 
 const adminNavigation = [
@@ -25,6 +26,7 @@ const adminNavigation = [
   { name: 'Computers', href: '/computers', icon: Monitor },
   { name: 'DNS', href: '/dns', icon: Globe },
   { name: 'Overlay Network', href: '/overlay', icon: Network },
+  { name: 'Security', href: '/security', icon: Shield },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 

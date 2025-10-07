@@ -16,6 +16,7 @@ import DomainManagement from './pages/DomainManagement'
 import DomainOUs from './pages/DomainOUs'
 import DomainPolicies from './pages/DomainPolicies'
 import SelfService from './pages/SelfService'
+import Security from './pages/Security'
 
 // Simple route protection - just check if authenticated
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -162,6 +163,11 @@ function App() {
             <Route path="overlay" element={
               <AdminRoute>
                 <OverlayNetworking />
+              </AdminRoute>
+            } />
+            <Route path="security" element={
+              <AdminRoute>
+                <Security />
               </AdminRoute>
             } />
           </Route>

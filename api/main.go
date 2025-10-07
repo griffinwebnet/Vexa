@@ -6,19 +6,21 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
-	"github.com/vexa/api/handlers"
-	"github.com/vexa/api/middleware"
+	"github.com/griffinwebnet/vexa/api/handlers"
+	"github.com/griffinwebnet/vexa/api/middleware"
+	"github.com/griffinwebnet/vexa/api/utils"
 )
 
-// Global dev mode flag
-var DevMode bool
-
-const Version = "0.2.97"
+const Version = "0.2.99"
 
 func main() {
 	// Parse command line flags
-	flag.BoolVar(&DevMode, "dev", false, "Enable development mode with test credentials")
 	flag.Parse()
+
+	// Initialize logger
+	if err := utils.InitLogger(); err != nil {
+		log.Printf("Warning: Failed to initialize logger: %v", err)
+	}
 
 	// Set Gin mode
 	if os.Getenv("ENV") == "production" {
@@ -26,7 +28,7 @@ func main() {
 	}
 
 	// Initialize handlers
-	authHandler := handlers.NewAuthHandler(DevMode)
+	authHandler := handlers.NewAuthHandler()
 	userHandler := handlers.NewUserHandler()
 	groupHandler := handlers.NewGroupHandler()
 	domainHandler := handlers.NewDomainHandler()
@@ -37,6 +39,9 @@ func main() {
 
 	// CORS middleware
 	router.Use(middleware.CORS())
+
+	// Audit logging middleware
+	router.Use(utils.AuditMiddleware())
 
 	// Health check
 	router.GET("/health", func(c *gin.Context) {
@@ -129,7 +134,9 @@ func main() {
 
 		// Logs and auditing
 		protected.GET("/audit/logs", handlers.GetAuditLogs)
-		protected.GET("/audit/events", handlers.GetAuditEvents)
+		protected.GET("/audit/stats", handlers.GetLogStats)
+		protected.GET("/audit/logs/:type", handlers.GetSystemLogs)
+		protected.POST("/audit/log-level", handlers.SetLogLevel)
 
 		// Overlay Networking (Headscale)
 		protected.GET("/system/overlay-status", overlayHandler.GetOverlayStatus)
@@ -144,10 +151,6 @@ func main() {
 	}
 
 	log.Printf("Vexa API Server starting on port %s", port)
-	if DevMode {
-		log.Println("WARNING: Development mode enabled - test credentials are active!")
-		log.Println("SECURITY: Never run with --dev flag in production!")
-	}
 	if err := router.Run(":" + port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}

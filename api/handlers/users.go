@@ -7,9 +7,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/vexa/api/models"
-	"github.com/vexa/api/services"
-	"github.com/vexa/api/utils"
+	"github.com/griffinwebnet/vexa/api/models"
+	"github.com/griffinwebnet/vexa/api/services"
+	"github.com/griffinwebnet/vexa/api/utils"
 )
 
 // UserHandler handles HTTP requests for user operations

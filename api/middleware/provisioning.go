@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/vexa/api/services"
+	"github.com/griffinwebnet/vexa/api/services"
 )
 
 // ProvisioningGate blocks non-admin users from accessing protected APIs

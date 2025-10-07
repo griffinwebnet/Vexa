@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/vexa/api/models"
-	"github.com/vexa/api/services"
+	"github.com/griffinwebnet/vexa/api/models"
+	"github.com/griffinwebnet/vexa/api/services"
 )
 
 // DomainHandler handles HTTP requests for domain operations

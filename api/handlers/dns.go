@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/vexa/api/services"
+	"github.com/griffinwebnet/vexa/api/services"
 )
 
 // DNSHandler handles HTTP requests for DNS operations

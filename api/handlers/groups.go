@@ -4,8 +4,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/vexa/api/models"
-	"github.com/vexa/api/services"
+	"github.com/griffinwebnet/vexa/api/models"
+	"github.com/griffinwebnet/vexa/api/services"
 )
 
 // GroupHandler handles HTTP requests for group operations

@@ -1,4 +1,4 @@
-module github.com/vexa/api
+module github.com/griffinwebnet/vexa/api
 
 go 1.21
 

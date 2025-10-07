@@ -1,13 +1,16 @@
 package services
 
 import (
+	"crypto/rand"
 	"fmt"
+	"math/big"
 	"os/exec"
 	"strings"
 	"time"
 
-	vexaexec "github.com/vexa/api/exec"
-	"github.com/vexa/api/models"
+	vexaexec "github.com/griffinwebnet/vexa/api/exec"
+	"github.com/griffinwebnet/vexa/api/models"
+	"github.com/griffinwebnet/vexa/api/utils"
 )
 
 // DomainService handles domain-related business logic
@@ -26,6 +29,7 @@ func NewDomainService() *DomainService {
 
 // GetDomainStatus returns the current status of the domain controller
 func (s *DomainService) GetDomainStatus() (*models.DomainStatusResponse, error) {
+	utils.Info("Checking domain controller status")
 	// Check if domain is provisioned using multiple methods
 	provisioned := false
 
@@ -251,6 +255,8 @@ func (s *DomainService) createDefaultGroups() error {
 
 // ProvisionDomainWithOutput provisions a new domain with streaming CLI output
 func (s *DomainService) ProvisionDomainWithOutput(req models.ProvisionDomainRequest, outputChan chan<- string) error {
+	utils.Info("Starting domain provisioning for domain: %s, realm: %s", req.Domain, req.Realm)
+
 	// Set defaults
 	if req.DNSBackend == "" {
 		req.DNSBackend = "SAMBA_INTERNAL"
@@ -261,12 +267,15 @@ func (s *DomainService) ProvisionDomainWithOutput(req models.ProvisionDomainRequ
 
 	// Check if samba-tool is available
 	outputChan <- "Checking if samba-tool is available..."
+	utils.Info("Checking samba-tool availability")
 	_, err := s.sambaTool.Run("--version")
 	if err != nil {
+		utils.Error("samba-tool not available: %v", err)
 		outputChan <- "ERROR: samba-tool not found or not accessible"
 		outputChan <- "ERROR: Please ensure Samba is installed: apt install samba samba-tools"
 		return fmt.Errorf("samba-tool not available: %v", err)
 	}
+	utils.Info("samba-tool is available")
 	outputChan <- "samba-tool is available"
 
 	// Clean up existing Samba configuration to avoid conflicts
@@ -379,6 +388,29 @@ func (s *DomainService) createDefaultGroupsWithOutput(outputChan chan<- string) 
 
 // generateAdminPassword generates a secure admin password
 func generateAdminPassword() string {
-	// Generate a strong 16-character password
-	return "TempAdmin123!" // TODO: Generate random secure password
+	// Generate a cryptographically secure random password
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
+	const length = 16
+
+	// Use crypto/rand for secure random generation
+	bytes := make([]byte, length)
+	for i := range bytes {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			// Fallback to a default secure password if random generation fails
+			return "SecurePass123!@#$"
+		}
+		bytes[i] = charset[n.Int64()]
+	}
+
+	// Ensure at least one uppercase, lowercase, digit, and special character
+	password := string(bytes)
+
+	// Replace first 4 characters to ensure complexity requirements
+	password = "A" + password[1:]                // Uppercase
+	password = password[:1] + "a" + password[2:] // Lowercase
+	password = password[:2] + "1" + password[3:] // Digit
+	password = password[:3] + "!" + password[4:] // Special char
+
+	return password
 }

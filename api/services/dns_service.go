@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/vexa/api/exec"
+	"github.com/griffinwebnet/vexa/api/exec"
 )
 
 // DNSService handles DNS-related business logic

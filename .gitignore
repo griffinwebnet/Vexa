@@ -10,6 +10,9 @@
 /logs/
 /var/
 
+# Audit logging examples and documentation
+AUDIT_LOGGING_EXAMPLES.md
+
 # API (Go)
 /api/vexa-api
 /api/.env

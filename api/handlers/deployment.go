@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/vexa/api/services"
+	"github.com/griffinwebnet/vexa/api/services"
 )
 
 // DeploymentHandler handles computer deployment operations

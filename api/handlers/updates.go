@@ -13,8 +13,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/vexa/api/services"
-	"github.com/vexa/api/version"
+	"github.com/griffinwebnet/vexa/api/services"
+	"github.com/griffinwebnet/vexa/api/version"
 )
 
 // GitHubRelease represents a GitHub release

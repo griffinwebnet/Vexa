@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
-import { Download, Shield, Info, Network } from 'lucide-react'
+import { Download, Shield, Info, Network, Eye } from 'lucide-react'
 import api from '../lib/api'
 import type { UpdateInfo } from '../types/updates'
 
@@ -171,8 +171,24 @@ export default function Settings() {
               </Button>
             </div>
             
-            <div className="text-center py-4 text-muted-foreground">
-              Additional settings coming soon
+            <div className="flex items-center justify-between p-4 rounded-lg bg-accent">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Eye className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <div className="font-medium">Audit Trail & Security</div>
+                  <div className="text-sm text-muted-foreground">
+                    View audit logs, system logs, and manage security settings
+                  </div>
+                </div>
+              </div>
+              <Button asChild variant="outline">
+                <a href="/security">
+                  <Eye className="mr-2 h-4 w-4" />
+                  Open Security Panel
+                </a>
+              </Button>
             </div>
           </div>
         </CardContent>

@@ -45,17 +45,31 @@ export default function ComputerDeploymentModal({
   const [deploymentScripts, setDeploymentScripts] = useState<DeploymentScript[]>([])
   const [headscaleEnabled, setHeadscaleEnabled] = useState(true)
   const [isLoadingScripts, setIsLoadingScripts] = useState(false)
+  const [error, setError] = useState<string>('')
 
-  // Fetch deployment scripts on modal open
+  // Fetch deployment scripts on modal open and reset state on close
   useEffect(() => {
     if (isOpen) {
       fetchDeploymentScripts()
+    } else {
+      // Reset all state when modal closes
+      setSelectedScript('')
+      setGeneratedCommand('')
+      setError('')
+      setCopied(false)
+      setIsGenerating(false)
     }
   }, [isOpen])
 
   // Auto-generate command when script is selected
   useEffect(() => {
-    if (selectedScript && !generatedCommand && !isGenerating) {
+    if (selectedScript) {
+      // Reset state when changing scripts
+      setGeneratedCommand('')
+      setError('')
+      setCopied(false)
+      
+      // Generate new command
       generateCommand()
     }
   }, [selectedScript])
@@ -104,6 +118,7 @@ export default function ComputerDeploymentModal({
     if (!selectedScript) return
 
     setIsGenerating(true)
+    setError('')
     try {
       const response = await api.post('/deployment/generate', {
         script_type: selectedScript,
@@ -113,8 +128,10 @@ export default function ComputerDeploymentModal({
       })
       
       setGeneratedCommand(response.data.command)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to generate command:', error)
+      const errorMessage = error?.response?.data?.error || 'Failed to generate deployment command. Please try again.'
+      setError(errorMessage)
     } finally {
       setIsGenerating(false)
     }
@@ -247,7 +264,7 @@ export default function ComputerDeploymentModal({
           </div>
 
           {/* Show info about automatic setup */}
-          {selectedScript && (selectedScript === 'tailscale-domain' || selectedScript === 'tailnet-add') && (
+          {selectedScript && (selectedScript === 'tailscale-domain' || selectedScript === 'tailnet-add') && !error && (
             <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
               <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
                 <CheckCircle className="h-4 w-4" />
@@ -256,6 +273,55 @@ export default function ComputerDeploymentModal({
               <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
                 A pre-auth key will be automatically generated and included in the deployment command. No manual configuration needed.
               </p>
+            </div>
+          )}
+
+          {/* Error Message */}
+          {error && (
+            <div className="p-4 bg-red-50 dark:bg-red-950/20 rounded-lg">
+              <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
+                <AlertCircle className="h-5 w-5" />
+                <span className="text-sm font-semibold">Error Generating Deployment Command</span>
+              </div>
+              <p className="text-sm text-red-600 dark:text-red-400 mt-2">
+                {error}
+              </p>
+              {error.includes('infrastructure key') && (
+                <div className="mt-3 p-3 bg-red-100 dark:bg-red-900/30 rounded border border-red-200 dark:border-red-800">
+                  <p className="text-xs text-red-700 dark:text-red-300 font-medium mb-2">
+                    This indicates a problem with the Headscale setup:
+                  </p>
+                  <ol className="text-xs text-red-600 dark:text-red-400 space-y-1 list-decimal list-inside">
+                    <li>Go to the Overlay Networking page</li>
+                    <li>Check if Headscale is running and properly configured</li>
+                    <li>Re-run the Headscale setup if needed</li>
+                    <li>The infrastructure user and pre-auth key should be created automatically during setup</li>
+                  </ol>
+                </div>
+              )}
+              <div className="mt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setError('')
+                    generateCommand()
+                  }}
+                  className="text-red-700 dark:text-red-300 border-red-300 dark:border-red-700"
+                >
+                  Try Again
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Loading State */}
+          {isGenerating && !error && (
+            <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg text-center">
+              <div className="flex items-center justify-center gap-2 text-blue-700 dark:text-blue-300">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-700 dark:border-blue-300"></div>
+                <span className="text-sm font-medium">Generating deployment command...</span>
+              </div>
             </div>
           )}
 

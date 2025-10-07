@@ -3,8 +3,8 @@ package services
 import (
 	"fmt"
 
-	"github.com/vexa/api/exec"
-	"github.com/vexa/api/models"
+	"github.com/griffinwebnet/vexa/api/exec"
+	"github.com/griffinwebnet/vexa/api/models"
 )
 
 // GroupService handles group-related business logic

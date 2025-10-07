@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	vexaexec "github.com/vexa/api/exec"
+	vexaexec "github.com/griffinwebnet/vexa/api/exec"
 )
 
 // HeadscaleService handles Headscale-related business logic
@@ -66,8 +66,14 @@ func (s *HeadscaleService) CreatePreAuthKey(user string, reusable bool, ephemera
 
 // GetInfrastructureKey returns the existing infrastructure pre-auth key
 func (s *HeadscaleService) GetInfrastructureKey() (string, error) {
-	// List all pre-auth keys for the infrastructure user
-	cmd := exec.Command("headscale", "preauthkeys", "list", "-u", "infrastructure", "-c", "/etc/headscale/config.yaml", "-o", "json")
+	// Get the infrastructure user ID first
+	userID, err := s.getInfrastructureUserID()
+	if err != nil {
+		return "", fmt.Errorf("failed to get infrastructure user ID: %v", err)
+	}
+
+	// List all pre-auth keys for the infrastructure user using the user ID
+	cmd := exec.Command("headscale", "preauthkeys", "list", "-u", fmt.Sprintf("%d", userID), "-c", "/etc/headscale/config.yaml", "-o", "json")
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to list pre-auth keys: %v", err)
@@ -79,16 +85,45 @@ func (s *HeadscaleService) GetInfrastructureKey() (string, error) {
 		return "", fmt.Errorf("failed to parse pre-auth keys: %v", err)
 	}
 
-	// Find the first reusable key
+	// Find the first reusable, non-expired key
 	for _, key := range keys {
 		if reusable, ok := key["reusable"].(bool); ok && reusable {
-			if keyStr, ok := key["key"].(string); ok && keyStr != "" {
-				return keyStr, nil
+			// Check if key is not expired
+			if expired, ok := key["expired"].(bool); ok && !expired {
+				if keyStr, ok := key["key"].(string); ok && keyStr != "" {
+					return keyStr, nil
+				}
 			}
 		}
 	}
 
-	return "", fmt.Errorf("no reusable infrastructure key found")
+	return "", fmt.Errorf("no reusable infrastructure key found - the Headscale setup may have failed")
+}
+
+// getInfrastructureUserID gets the numeric ID of the infrastructure user
+func (s *HeadscaleService) getInfrastructureUserID() (int, error) {
+	cmd := exec.Command("headscale", "users", "list", "-c", "/etc/headscale/config.yaml", "-o", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, fmt.Errorf("failed to list users: %v", err)
+	}
+
+	// Parse users
+	var users []map[string]interface{}
+	if err := json.Unmarshal(output, &users); err != nil {
+		return 0, fmt.Errorf("failed to parse users: %v", err)
+	}
+
+	// Find infrastructure user and get its ID
+	for _, user := range users {
+		if name, ok := user["name"].(string); ok && name == "infrastructure" {
+			if id, ok := user["id"].(float64); ok {
+				return int(id), nil
+			}
+		}
+	}
+
+	return 0, fmt.Errorf("infrastructure user not found")
 }
 
 // IsEnabled checks if Headscale is available and configured

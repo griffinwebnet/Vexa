@@ -15,11 +15,15 @@ func AuthenticatePAM(username, password string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "pamtester", "login", username, "authenticate")
+	cmd, err := SafeCommandContext(ctx, "pamtester", "login", username, "authenticate")
+	if err != nil {
+		Error("Command sanitization failed for pamtester: %v", err)
+		return false
+	}
 	cmd.Stdin = strings.NewReader(password + "\n")
 
-	err := cmd.Run()
-	return err == nil
+	runErr := cmd.Run()
+	return runErr == nil
 }
 
 // AuthenticateSAMBA authenticates against SAMBA/Active Directory
@@ -30,8 +34,11 @@ func AuthenticateSAMBA(username, password string) bool {
 	defer cancel()
 
 	// Method 1: Try simple smbclient first (most reliable for basic auth)
-	fmt.Printf("DEBUG: Trying smbclient //localhost/ipc$ with user %s\n", username)
-	cmd := exec.CommandContext(ctx, "smbclient", "//localhost/ipc$", "-U", username+"%"+password, "-c", "exit")
+	cmd, err := SafeCommandContext(ctx, "smbclient", "//localhost/ipc$", "-U", username+"%"+password, "-c", "exit")
+	if err != nil {
+		Error("Command sanitization failed for smbclient: %v", err)
+		return false
+	}
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		fmt.Printf("DEBUG: smbclient authentication successful for %s\n", username)
@@ -42,13 +49,17 @@ func AuthenticateSAMBA(username, password string) bool {
 
 	// Method 2: Try with netlogon share
 	fmt.Printf("DEBUG: Trying smbclient //localhost/netlogon with user %s\n", username)
-	cmd2 := exec.CommandContext(ctx, "smbclient", "//localhost/netlogon", "-U", username+"%"+password, "-c", "exit")
-	output2, err := cmd2.CombinedOutput()
-	if err == nil {
+	cmd2, err := SafeCommandContext(ctx, "smbclient", "//localhost/netlogon", "-U", username+"%"+password, "-c", "exit")
+	if err != nil {
+		Error("Command sanitization failed for smbclient netlogon: %v", err)
+		return false
+	}
+	output2, err2 := cmd2.CombinedOutput()
+	if err2 == nil {
 		fmt.Printf("DEBUG: smbclient netlogon authentication successful for %s\n", username)
 		return true
 	} else {
-		fmt.Printf("DEBUG: smbclient netlogon failed: %v, output: %s\n", err, string(output2))
+		fmt.Printf("DEBUG: smbclient netlogon failed: %v, output: %s\n", err2, string(output2))
 	}
 
 	// Method 3: Get domain name and try domain-prefixed authentication

@@ -6,19 +6,22 @@ import (
 	exec "os/exec"
 	"strings"
 
-	sambaExec "github.com/vexa/api/exec"
-	"github.com/vexa/api/models"
+	"github.com/griffinwebnet/vexa/api/config"
+	sambaExec "github.com/griffinwebnet/vexa/api/exec"
+	"github.com/griffinwebnet/vexa/api/models"
 )
 
 // ComputerService handles computer-related business logic
 type ComputerService struct {
 	sambaTool *sambaExec.SambaTool
+	config    *config.Config
 }
 
 // NewComputerService creates a new ComputerService instance
 func NewComputerService() *ComputerService {
 	return &ComputerService{
 		sambaTool: sambaExec.NewSambaTool(),
+		config:    config.LoadConfig(),
 	}
 }
 
@@ -92,13 +95,13 @@ func (s *ComputerService) ListComputers() ([]models.Computer, error) {
 				}
 			} else {
 				// Try to find a Tailscale node that might be the same machine
-				// Check if this is the domain controller and look for "vexa-server" or similar
+				// Check if this is the domain controller and look for server names
 				dcHostname := s.getDomainControllerHostname()
 				if cleanName == strings.TrimSuffix(dcHostname, "$") {
-					// This is the DC, look for common Tailscale names
-					possibleNames := []string{"vexa-server", "vexa", "dc", "domain-controller"}
-					for _, possibleName := range possibleNames {
-						if node, exists := tailscaleNodes[possibleName]; exists {
+					// This is the DC, look for server names from configuration
+					serverNames := s.config.GetAllServerNames()
+					for _, serverName := range serverNames {
+						if node, exists := tailscaleNodes[serverName]; exists {
 							if ip := s.extractIPFromNode(node); ip != "" {
 								computer.OverlayIP = ip
 								computer.Online = true
@@ -121,7 +124,7 @@ func (s *ComputerService) ListComputers() ([]models.Computer, error) {
 		computers = append(computers, computer)
 	}
 
-	// Add Tailscale-only nodes (not domain-joined)
+	// Add Tailscale-only nodes (not domain-joined) and the server itself
 	if tailscaleNodes != nil {
 		dcHostname := s.getDomainControllerHostname()
 		dcCleanName := strings.TrimSuffix(dcHostname, "$")
@@ -132,12 +135,10 @@ func (s *ComputerService) ListComputers() ([]models.Computer, error) {
 				continue
 			}
 
-			// Skip if this is the domain controller (already handled above)
-			if nodeName == dcCleanName || nodeName == "vexa-server" || nodeName == "vexa" {
-				continue
-			}
+			// Check if this is the server itself using dynamic configuration
+			isServer := s.config.IsServerName(nodeName) || nodeName == dcCleanName
 
-			// This is a Tailscale-only node (like a NAS, etc.)
+			// This is either a Tailscale-only node (like a NAS, etc.) or the server itself
 			computer := models.Computer{
 				Name:           nodeName,
 				DNSName:        nodeName,
@@ -154,6 +155,11 @@ func (s *ComputerService) ListComputers() ([]models.Computer, error) {
 			domainStatus, _ := domainService.GetDomainStatus()
 			if domainStatus != nil && domainStatus.Domain != "" && domainStatus.Domain != "PROVISIONED" {
 				computer.OverlayURL = fmt.Sprintf("%s.%s.mesh", nodeName, domainStatus.Domain)
+			}
+
+			// Add special indicator for the server
+			if isServer {
+				computer.Name = nodeName + " (Server)"
 			}
 
 			computers = append(computers, computer)

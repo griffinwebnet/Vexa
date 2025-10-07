@@ -11,6 +11,8 @@ import (
 	"strings"
 	"text/template"
 	"time"
+
+	"github.com/griffinwebnet/vexa/api/utils"
 )
 
 // OverlayService handles Headscale/Tailscale overlay networking
@@ -20,6 +22,7 @@ type OverlayService struct {
 
 // NewOverlayService creates a new OverlayService
 func NewOverlayService() *OverlayService {
+	utils.Info("Initializing OverlayService")
 	return &OverlayService{
 		ddnsService: NewDDNSService(),
 	}
@@ -33,10 +36,14 @@ type JoinScripts struct {
 
 // SetupOverlay configures Headscale and Tailscale
 func (s *OverlayService) SetupOverlay(fqdn string) error {
+	utils.Info("Setting up overlay networking for FQDN: %s", fqdn)
 	// Install Headscale
+	utils.Info("Installing Headscale")
 	if err := s.installHeadscale(); err != nil {
+		utils.Error("Failed to install Headscale: %v", err)
 		return fmt.Errorf("failed to install headscale: %v", err)
 	}
+	utils.Info("Headscale installation completed")
 
 	// Configure Headscale
 	if err := s.configureHeadscale(fqdn); err != nil {
@@ -81,26 +88,32 @@ func (s *OverlayService) installHeadscale() error {
 	// Check if already installed and working
 	if _, err := exec.LookPath("headscale"); err == nil {
 		// Test if the binary actually works
-		if testCmd := exec.Command("headscale", "--help"); testCmd.Run() == nil {
+		if testCmd, err := utils.SafeCommand("headscale", "--help"); err == nil && testCmd.Run() == nil {
 			return nil
 		}
 		// If it exists but doesn't work, remove it and reinstall
 		fmt.Printf("DEBUG: Removing corrupted headscale installation\n")
-		exec.Command("dpkg", "--remove", "headscale").Run()
-		exec.Command("apt", "autoremove", "-y").Run()
+		if cmd, err := utils.SafeCommand("dpkg", "--remove", "headscale"); err == nil {
+			cmd.Run()
+		}
+		if cmd, err := utils.SafeCommand("apt", "autoremove", "-y"); err == nil {
+			cmd.Run()
+		}
 	}
 
 	// Detect architecture
 	arch := "amd64"
-	if unameM, err := exec.Command("uname", "-m").Output(); err == nil {
-		archStr := strings.TrimSpace(string(unameM))
-		switch archStr {
-		case "x86_64":
-			arch = "amd64"
-		case "aarch64":
-			arch = "arm64"
-		default:
-			arch = "amd64" // fallback
+	if cmd, err := utils.SafeCommand("uname", "-m"); err == nil {
+		if unameM, err := cmd.Output(); err == nil {
+			archStr := strings.TrimSpace(string(unameM))
+			switch archStr {
+			case "x86_64":
+				arch = "amd64"
+			case "aarch64":
+				arch = "arm64"
+			default:
+				arch = "amd64" // fallback
+			}
 		}
 	}
 
@@ -122,23 +135,34 @@ func (s *OverlayService) installHeadscale() error {
 	debURL := fmt.Sprintf("https://github.com/juanfont/headscale/releases/download/v%s/headscale_%s_linux_%s.deb", version, version, arch)
 	fmt.Printf("DEBUG: Downloading headscale .deb from: %s\n", debURL)
 
-	downloadCmd := exec.Command("wget", "--output-document=headscale.deb", debURL)
-	downloadOutput, err := downloadCmd.CombinedOutput()
+	downloadCmd, err := utils.SafeCommand("wget", "--output-document", "headscale.deb", debURL)
 	if err != nil {
-		fmt.Printf("DEBUG: Download failed: %v, output: %s\n", err, string(downloadOutput))
-		return fmt.Errorf("failed to download headscale .deb: %v", err)
+		return fmt.Errorf("command sanitization failed for wget: %v", err)
+	}
+	downloadOutput, downloadErr := downloadCmd.CombinedOutput()
+	if downloadErr != nil {
+		fmt.Printf("DEBUG: Download failed: %v, output: %s\n", downloadErr, string(downloadOutput))
+		return fmt.Errorf("failed to download headscale .deb: %v", downloadErr)
 	}
 
 	// Install the .deb package
 	fmt.Printf("DEBUG: Installing headscale .deb package\n")
-	installCmd := exec.Command("dpkg", "-i", "headscale.deb")
+	installCmd, err := utils.SafeCommand("dpkg", "-i", "headscale.deb")
+	if err != nil {
+		return fmt.Errorf("command sanitization failed for dpkg: %v", err)
+	}
 	installOutput, err := installCmd.CombinedOutput()
 	if err != nil {
 		fmt.Printf("DEBUG: Installation failed: %v, output: %s\n", err, string(installOutput))
 		// Try to fix dependencies
-		exec.Command("apt", "install", "-f", "-y").Run()
+		if fixCmd, fixErr := utils.SafeCommand("apt", "install", "-f", "-y"); fixErr == nil {
+			fixCmd.Run()
+		}
 		// Try installation again
-		installCmd = exec.Command("dpkg", "-i", "headscale.deb")
+		installCmd, err = utils.SafeCommand("dpkg", "-i", "headscale.deb")
+		if err != nil {
+			return fmt.Errorf("command sanitization failed for dpkg retry: %v", err)
+		}
 		_, err = installCmd.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("failed to install headscale .deb: %v", err)
@@ -149,7 +173,7 @@ func (s *OverlayService) installHeadscale() error {
 	os.Remove("headscale.deb")
 
 	// Test the installation
-	if testCmd := exec.Command("headscale", "--help"); testCmd.Run() != nil {
+	if testCmd, err := utils.SafeCommand("headscale", "--help"); err != nil || testCmd.Run() != nil {
 		return fmt.Errorf("headscale installation failed - binary not working")
 	}
 
@@ -179,7 +203,10 @@ func (s *OverlayService) configureHeadscale(fqdn string) error {
 	}
 
 	// Get the actual server hostname
-	hostnameCmd := exec.Command("hostname")
+	hostnameCmd, err := utils.SafeCommand("hostname")
+	if err != nil {
+		return fmt.Errorf("command sanitization failed for hostname: %v", err)
+	}
 	hostnameOutput, err := hostnameCmd.Output()
 	serverHostname := "dc" // fallback
 	if err == nil {
@@ -552,8 +579,18 @@ func (s *OverlayService) joinMeshLocal(fqdn string, meshDomain string) error {
 
 	fmt.Printf("DEBUG: Using localhost login server: %s\n", loginServer)
 
+	// Get server hostname from configuration
+	serverHostname := os.Getenv("SERVER_HOSTNAME")
+	if serverHostname == "" {
+		if hostname, err := os.Hostname(); err == nil {
+			serverHostname = hostname
+		} else {
+			serverHostname = "server" // Fallback
+		}
+	}
+
 	// Join mesh using localhost
-	joinCmd := exec.Command("tailscale", "up", "--authkey", authKey, "--login-server", loginServer, "--accept-routes", "--accept-dns=false", "--hostname", "vexa-server")
+	joinCmd := exec.Command("tailscale", "up", "--authkey", authKey, "--login-server", loginServer, "--accept-routes", "--accept-dns=false", "--hostname", serverHostname)
 	joinOutput, joinErr := joinCmd.CombinedOutput()
 	if joinErr != nil {
 		return fmt.Errorf("failed to join mesh via localhost: %v, output: %s", joinErr, string(joinOutput))
