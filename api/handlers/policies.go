@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"os/exec"
 	"strconv"
 	"strings"
 
@@ -30,7 +29,14 @@ type DomainPolicySettings struct {
 // GetDomainPolicies returns current domain password and security policies
 func GetDomainPolicies(c *gin.Context) {
 	// Get current password settings using samba-tool
-	cmd := exec.Command("samba-tool", "domain", "passwordsettings", "show")
+	cmd, cmdErr := utils.SafeCommand("samba-tool", "domain", "passwordsettings", "show")
+	if cmdErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Command sanitization failed",
+			"details": cmdErr.Error(),
+		})
+		return
+	}
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
@@ -90,7 +96,14 @@ func UpdateDomainPolicies(c *gin.Context) {
 	}
 
 	for _, cmdArgs := range commands {
-		cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
+		cmd, cmdErr := utils.SafeCommand(cmdArgs[0], cmdArgs[1:]...)
+		if cmdErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Command sanitization failed",
+				"command": cmdArgs,
+			})
+			return
+		}
 		if err := cmd.Run(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error":   "Failed to apply password settings",
@@ -156,9 +169,18 @@ func CreateOU(c *gin.Context) {
 		ouPath += "," + req.ParentPath
 	}
 
-	cmd := exec.Command("samba-tool", "ou", "create", ouPath)
+	args := []string{"ou", "create", ouPath}
 	if req.Description != "" {
-		cmd.Args = append(cmd.Args, "--description="+req.Description)
+		args = append(args, "--description="+req.Description)
+	}
+
+	cmd, cmdErr := utils.SafeCommand("samba-tool", args...)
+	if cmdErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Command sanitization failed",
+			"details": cmdErr.Error(),
+		})
+		return
 	}
 
 	output, err := cmd.CombinedOutput()
@@ -180,7 +202,14 @@ func CreateOU(c *gin.Context) {
 func DeleteOU(c *gin.Context) {
 	ouPath := c.Param("path")
 
-	cmd := exec.Command("samba-tool", "ou", "delete", ouPath)
+	cmd, cmdErr := utils.SafeCommand("samba-tool", "ou", "delete", ouPath)
+	if cmdErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Command sanitization failed",
+			"details": cmdErr.Error(),
+		})
+		return
+	}
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {

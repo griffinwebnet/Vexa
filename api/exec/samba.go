@@ -2,8 +2,9 @@ package exec
 
 import (
 	"bufio"
-	"os/exec"
 	"strings"
+
+	"github.com/griffinwebnet/vexa/api/utils"
 )
 
 // SambaTool provides an interface for executing samba-tool commands
@@ -16,7 +17,10 @@ func NewSambaTool() *SambaTool {
 
 // Run executes a samba-tool command with the given arguments
 func (s *SambaTool) Run(args ...string) (string, error) {
-	cmd := exec.Command("samba-tool", args...)
+	cmd, cmdErr := utils.SafeCommand("samba-tool", args...)
+	if cmdErr != nil {
+		return "", cmdErr
+	}
 	output, err := cmd.CombinedOutput()
 	return string(output), err
 }
@@ -144,7 +148,10 @@ func (s *SambaTool) DomainProvision(options DomainProvisionOptions) (string, err
 	}
 
 	// Run provision command
-	cmd := exec.Command("samba-tool", args...)
+	cmd, cmdErr := utils.SafeCommand("samba-tool", args...)
+	if cmdErr != nil {
+		return "", cmdErr
+	}
 	output, err := cmd.CombinedOutput()
 	return string(output), err
 }
@@ -166,7 +173,10 @@ func (s *SambaTool) DomainProvisionWithOutput(options DomainProvisionOptions, ou
 	}
 
 	// Run provision command with streaming output
-	cmd := exec.Command("samba-tool", args...)
+	cmd, cmdErr := utils.SafeCommand("samba-tool", args...)
+	if cmdErr != nil {
+		return "", cmdErr
+	}
 
 	// Create a pipe for stdout
 	stdout, err := cmd.StdoutPipe()

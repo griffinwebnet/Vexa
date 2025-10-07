@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -90,7 +89,10 @@ func (s *DomainService) GetDomainStatus() (*models.DomainStatusResponse, error) 
 
 // hasDomainConfiguration checks if the Samba config has domain controller settings
 func (s *DomainService) hasDomainConfiguration() bool {
-	cmd := exec.Command("testparm", "-s", "--parameter-name", "server role")
+	cmd, cmdErr := utils.SafeCommand("testparm", "-s", "--parameter-name", "server role")
+	if cmdErr != nil {
+		return false
+	}
 	output, err := cmd.Output()
 	if err != nil {
 		return false
@@ -183,7 +185,11 @@ func (s *DomainService) parseSmbConf() (string, string) {
 
 // parseTestparm parses testparm output for domain info
 func (s *DomainService) parseTestparm() (string, string) {
-	cmd := exec.Command("testparm", "-s", "--parameter-name", "workgroup")
+	cmd, cmdErr := utils.SafeCommand("testparm", "-s", "--parameter-name", "workgroup")
+	if cmdErr != nil {
+		fmt.Printf("DEBUG: command sanitization failed for testparm workgroup: %v\n", cmdErr)
+		return "", ""
+	}
 	output, err := cmd.Output()
 	if err != nil {
 		fmt.Printf("DEBUG: testparm workgroup failed: %v\n", err)
@@ -194,7 +200,11 @@ func (s *DomainService) parseTestparm() (string, string) {
 	fmt.Printf("DEBUG: testparm workgroup output: %s\n", domain)
 
 	// Get realm
-	cmd2 := exec.Command("testparm", "-s", "--parameter-name", "realm")
+	cmd2, cmd2Err := utils.SafeCommand("testparm", "-s", "--parameter-name", "realm")
+	if cmd2Err != nil {
+		fmt.Printf("DEBUG: command sanitization failed for testparm realm: %v\n", cmd2Err)
+		return domain, ""
+	}
 	output2, err2 := cmd2.Output()
 	if err2 != nil {
 		fmt.Printf("DEBUG: testparm realm failed: %v\n", err2)

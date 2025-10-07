@@ -3,12 +3,12 @@ package services
 import (
 	"encoding/json"
 	"fmt"
-	exec "os/exec"
 	"strings"
 
 	"github.com/griffinwebnet/vexa/api/config"
 	sambaExec "github.com/griffinwebnet/vexa/api/exec"
 	"github.com/griffinwebnet/vexa/api/models"
+	"github.com/griffinwebnet/vexa/api/utils"
 )
 
 // ComputerService handles computer-related business logic
@@ -183,7 +183,10 @@ func (s *ComputerService) GetMachineDetails(machineId string) (map[string]interf
 	fmt.Printf("DEBUG: Looking for machine: %s\n", machineId)
 
 	// Query Headscale for machine details
-	cmd := exec.Command("headscale", "nodes", "list", "--output", "json")
+	cmd, cmdErr := utils.SafeCommand("headscale", "nodes", "list", "--output", "json")
+	if cmdErr != nil {
+		return nil, fmt.Errorf("command sanitization failed: %v", cmdErr)
+	}
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to query headscale: %v", err)
@@ -318,18 +321,27 @@ func (s *ComputerService) DeleteComputer(computerName string) error {
 // Helper functions
 
 func (s *ComputerService) isHeadscaleEnabled() bool {
-	cmd := exec.Command("systemctl", "is-active", "headscale")
+	cmd, err := utils.SafeCommand("systemctl", "is-active", "headscale")
+	if err != nil {
+		return false
+	}
 	return cmd.Run() == nil
 }
 
 func (s *ComputerService) pingComputer(hostname string) bool {
-	cmd := exec.Command("ping", "-c", "1", "-W", "1", hostname)
+	cmd, err := utils.SafeCommand("ping", "-c", "1", "-W", "1", hostname)
+	if err != nil {
+		return false
+	}
 	return cmd.Run() == nil
 }
 
 func (s *ComputerService) getComputerIP(hostname string) string {
 	// First try to get the actual network IP using ip command
-	cmd := exec.Command("ip", "route", "get", "1.1.1.1")
+	cmd, cmdErr := utils.SafeCommand("ip", "route", "get", "1.1.1.1")
+	if cmdErr != nil {
+		return ""
+	}
 	output, err := cmd.Output()
 	if err == nil {
 		// Parse output like "1.1.1.1 via 192.168.1.1 dev eth0 src 192.168.1.100"
@@ -351,7 +363,10 @@ func (s *ComputerService) getComputerIP(hostname string) string {
 	}
 
 	// Fallback to hostname resolution
-	cmd = exec.Command("host", hostname)
+	cmd, cmdErr = utils.SafeCommand("host", hostname)
+	if cmdErr != nil {
+		return ""
+	}
 	output, err = cmd.Output()
 	if err != nil {
 		return ""
@@ -376,7 +391,10 @@ func (s *ComputerService) getComputerIP(hostname string) string {
 
 func (s *ComputerService) getHeadscaleIP(hostname string) string {
 	// Query Headscale for this node
-	cmd := exec.Command("headscale", "nodes", "list", "--output", "json")
+	cmd, cmdErr := utils.SafeCommand("headscale", "nodes", "list", "--output", "json")
+	if cmdErr != nil {
+		return ""
+	}
 	output, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -421,7 +439,10 @@ func (s *ComputerService) getHeadscaleIP(hostname string) string {
 
 func (s *ComputerService) getDomainControllerHostname() string {
 	// Get hostname of the current system
-	cmd := exec.Command("hostname")
+	cmd, cmdErr := utils.SafeCommand("hostname")
+	if cmdErr != nil {
+		return ""
+	}
 	output, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -431,7 +452,10 @@ func (s *ComputerService) getDomainControllerHostname() string {
 
 // getTailscaleNodes returns a map of node names to their data from Headscale
 func (s *ComputerService) getTailscaleNodes() map[string]map[string]interface{} {
-	cmd := exec.Command("headscale", "nodes", "list", "--output", "json")
+	cmd, cmdErr := utils.SafeCommand("headscale", "nodes", "list", "--output", "json")
+	if cmdErr != nil {
+		return nil
+	}
 	output, err := cmd.Output()
 	if err != nil {
 		return nil

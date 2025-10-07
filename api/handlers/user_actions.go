@@ -4,9 +4,9 @@ import (
 	"crypto/rand"
 	"math/big"
 	"net/http"
-	"os/exec"
 
 	"github.com/gin-gonic/gin"
+	"github.com/griffinwebnet/vexa/api/utils"
 )
 
 // Word lists for password generation
@@ -49,7 +49,13 @@ func ChangePassword(c *gin.Context) {
 	}
 
 	// Verify current password
-	cmd := exec.Command("smbclient", "-L", "localhost", "-U", username+"%"+req.CurrentPassword)
+	cmd, cmdErr := utils.SafeCommand("smbclient", "-L", "localhost", "-U", username+"%"+req.CurrentPassword)
+	if cmdErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Command sanitization failed",
+		})
+		return
+	}
 	if err := cmd.Run(); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "Current password is incorrect",
@@ -58,7 +64,13 @@ func ChangePassword(c *gin.Context) {
 	}
 
 	// Change password
-	cmd = exec.Command("samba-tool", "user", "setpassword", username, "--newpassword="+req.NewPassword)
+	cmd, cmdErr = utils.SafeCommand("samba-tool", "user", "setpassword", username, "--newpassword="+req.NewPassword)
+	if cmdErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Command sanitization failed",
+		})
+		return
+	}
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -87,7 +99,13 @@ func UpdateProfile(c *gin.Context) {
 
 	// Update display name
 	if req.FullName != "" {
-		cmd := exec.Command("samba-tool", "user", "edit", username, "--editor=/bin/echo", "--full-name="+req.FullName)
+		cmd, cmdErr := utils.SafeCommand("samba-tool", "user", "edit", username, "--editor=/bin/echo", "--full-name="+req.FullName)
+		if cmdErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Command sanitization failed",
+			})
+			return
+		}
 		if err := cmd.Run(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "Failed to update display name",
@@ -98,7 +116,13 @@ func UpdateProfile(c *gin.Context) {
 
 	// Update email
 	if req.Email != "" {
-		cmd := exec.Command("samba-tool", "user", "edit", username, "--editor=/bin/echo", "--mail-address="+req.Email)
+		cmd, cmdErr := utils.SafeCommand("samba-tool", "user", "edit", username, "--editor=/bin/echo", "--mail-address="+req.Email)
+		if cmdErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Command sanitization failed",
+			})
+			return
+		}
 		if err := cmd.Run(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "Failed to update email",
@@ -120,7 +144,13 @@ func ResetUserPassword(c *gin.Context) {
 	password := generatePassword()
 
 	// Reset password using samba-tool
-	cmd := exec.Command("samba-tool", "user", "setpassword", username, "--newpassword="+password)
+	cmd, cmdErr := utils.SafeCommand("samba-tool", "user", "setpassword", username, "--newpassword="+password)
+	if cmdErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Command sanitization failed",
+		})
+		return
+	}
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
@@ -142,7 +172,13 @@ func ResetUserPassword(c *gin.Context) {
 func DisableUser(c *gin.Context) {
 	username := c.Param("id")
 
-	cmd := exec.Command("samba-tool", "user", "disable", username)
+	cmd, cmdErr := utils.SafeCommand("samba-tool", "user", "disable", username)
+	if cmdErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Command sanitization failed",
+		})
+		return
+	}
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
@@ -163,7 +199,13 @@ func DisableUser(c *gin.Context) {
 func EnableUser(c *gin.Context) {
 	username := c.Param("id")
 
-	cmd := exec.Command("samba-tool", "user", "enable", username)
+	cmd, cmdErr := utils.SafeCommand("samba-tool", "user", "enable", username)
+	if cmdErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Command sanitization failed",
+		})
+		return
+	}
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {

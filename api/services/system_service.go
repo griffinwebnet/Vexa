@@ -2,14 +2,18 @@ package services
 
 import (
 	"bytes"
-	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/griffinwebnet/vexa/api/utils"
 )
 
 // GetSambaVersion returns the installed Samba version
 func GetSambaVersion() string {
-	cmd := exec.Command("samba", "-V")
+	cmd, err := utils.SafeCommand("samba", "-V")
+	if err != nil {
+		return "unknown"
+	}
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
@@ -21,7 +25,10 @@ func GetSambaVersion() string {
 // CheckSambaUpdates checks if Samba updates are available
 func CheckSambaUpdates() string {
 	// Use package manager to check for updates
-	cmd := exec.Command("apt", "list", "--upgradable", "samba")
+	cmd, err := utils.SafeCommand("apt", "list", "--upgradable", "samba")
+	if err != nil {
+		return "unknown"
+	}
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
@@ -36,7 +43,10 @@ func CheckSambaUpdates() string {
 // GetSambaLastUpdate returns when Samba was last updated
 func GetSambaLastUpdate() string {
 	// Check package install time
-	cmd := exec.Command("stat", "-c", "%y", "/usr/sbin/samba")
+	cmd, err := utils.SafeCommand("stat", "-c", "%y", "/usr/sbin/samba")
+	if err != nil {
+		return time.Now().Format(time.RFC3339)
+	}
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
@@ -53,7 +63,10 @@ func CheckSambaDependencies() bool {
 	}
 
 	for _, dep := range deps {
-		cmd := exec.Command("dpkg", "-s", dep)
+		cmd, cmdErr := utils.SafeCommand("dpkg", "-s", dep)
+		if cmdErr != nil {
+			return false
+		}
 		if err := cmd.Run(); err != nil {
 			return false
 		}
@@ -63,7 +76,10 @@ func CheckSambaDependencies() bool {
 
 // GetHeadscaleVersion returns the installed Headscale version
 func GetHeadscaleVersion() string {
-	cmd := exec.Command("headscale", "version")
+	cmd, err := utils.SafeCommand("headscale", "version")
+	if err != nil {
+		return "unknown"
+	}
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
@@ -80,7 +96,10 @@ func CheckHeadscaleUpdates() string {
 
 // GetHeadscaleLastUpdate returns when Headscale was last updated
 func GetHeadscaleLastUpdate() string {
-	cmd := exec.Command("stat", "-c", "%y", "/usr/local/bin/headscale")
+	cmd, err := utils.SafeCommand("stat", "-c", "%y", "/usr/local/bin/headscale")
+	if err != nil {
+		return time.Now().Format(time.RFC3339)
+	}
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
@@ -98,7 +117,10 @@ func CheckHeadscaleDependencies() bool {
 	}
 
 	for _, svc := range services {
-		cmd := exec.Command("systemctl", "is-enabled", svc)
+		cmd, cmdErr := utils.SafeCommand("systemctl", "is-enabled", svc)
+		if cmdErr != nil {
+			return false
+		}
 		if err := cmd.Run(); err != nil {
 			return false
 		}

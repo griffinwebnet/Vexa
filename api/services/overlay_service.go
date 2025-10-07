@@ -348,18 +348,26 @@ func (s *OverlayService) startHeadscale() error {
 
 	// Kill any processes using port 50443 (including test listeners)
 	fmt.Printf("DEBUG: Cleaning up any processes using port 50443\n")
-	exec.Command("pkill", "-f", "50443").Run()
-	exec.Command("pkill", "-f", "headscale").Run()
+	if cmd, err := utils.SafeCommand("pkill", "-f", "50443"); err == nil {
+		cmd.Run()
+	}
+	if cmd, err := utils.SafeCommand("pkill", "-f", "headscale"); err == nil {
+		cmd.Run()
+	}
 	time.Sleep(2 * time.Second)
 
 	// Initialize the database first
 	fmt.Printf("DEBUG: Initializing Headscale database\n")
-	initCmd := exec.Command(headscalePath, "migrate", "-c", "/etc/headscale/config.yaml")
-	initOutput, initErr := initCmd.CombinedOutput()
-	if initErr != nil {
-		fmt.Printf("DEBUG: Database migration output: %s\n", string(initOutput))
-		fmt.Printf("DEBUG: Database migration error: %v\n", initErr)
-		// Continue anyway - database might already be initialized
+	initCmd, initCmdErr := utils.SafeCommand("headscale", "migrate", "-c", "/etc/headscale/config.yaml")
+	if initCmdErr != nil {
+		fmt.Printf("DEBUG: Command sanitization failed: %v\n", initCmdErr)
+	} else {
+		initOutput, initErr := initCmd.CombinedOutput()
+		if initErr != nil {
+			fmt.Printf("DEBUG: Database migration output: %s\n", string(initOutput))
+			fmt.Printf("DEBUG: Database migration error: %v\n", initErr)
+			// Continue anyway - database might already be initialized
+		}
 	}
 
 	// Create systemd service with correct binary path
@@ -385,15 +393,21 @@ WantedBy=multi-user.target`, headscalePath)
 	}
 
 	// Reload systemd
-	if err := exec.Command("systemctl", "daemon-reload").Run(); err != nil {
+	if cmd, err := utils.SafeCommand("systemctl", "daemon-reload"); err != nil {
+		return fmt.Errorf("command sanitization failed: %v", err)
+	} else if err := cmd.Run(); err != nil {
 		return err
 	}
 
 	// Stop any existing service first
-	exec.Command("systemctl", "stop", "headscale").Run()
+	if cmd, err := utils.SafeCommand("systemctl", "stop", "headscale"); err == nil {
+		cmd.Run()
+	}
 
 	// Start and enable service
-	if err := exec.Command("systemctl", "enable", "--now", "headscale").Run(); err != nil {
+	if cmd, err := utils.SafeCommand("systemctl", "enable", "--now", "headscale"); err != nil {
+		return fmt.Errorf("command sanitization failed: %v", err)
+	} else if err := cmd.Run(); err != nil {
 		return err
 	}
 
@@ -408,22 +422,34 @@ func (s *OverlayService) installTailscale() error {
 	}
 
 	// Add Tailscale repo and install
-	cmd := exec.Command("curl", "-fsSL", "https://pkgs.tailscale.com/stable/ubuntu/jammy.noarmor.gpg", "-o", "/usr/share/keyrings/tailscale-archive-keyring.gpg")
+	cmd, err := utils.SafeCommand("curl", "-fsSL", "https://pkgs.tailscale.com/stable/ubuntu/jammy.noarmor.gpg", "-o", "/usr/share/keyrings/tailscale-archive-keyring.gpg")
+	if err != nil {
+		return fmt.Errorf("command sanitization failed: %v", err)
+	}
 	if err := cmd.Run(); err != nil {
 		return err
 	}
 
-	cmd = exec.Command("curl", "-fsSL", "https://pkgs.tailscale.com/stable/ubuntu/jammy.tailscale-keyring.list", "-o", "/etc/apt/sources.list.d/tailscale.list")
+	cmd, err = utils.SafeCommand("curl", "-fsSL", "https://pkgs.tailscale.com/stable/ubuntu/jammy.tailscale-keyring.list", "-o", "/etc/apt/sources.list.d/tailscale.list")
+	if err != nil {
+		return fmt.Errorf("command sanitization failed: %v", err)
+	}
 	if err := cmd.Run(); err != nil {
 		return err
 	}
 
-	cmd = exec.Command("apt", "update")
+	cmd, err = utils.SafeCommand("apt", "update")
+	if err != nil {
+		return fmt.Errorf("command sanitization failed: %v", err)
+	}
 	if err := cmd.Run(); err != nil {
 		return err
 	}
 
-	cmd = exec.Command("apt", "install", "-y", "tailscale")
+	cmd, err = utils.SafeCommand("apt", "install", "-y", "tailscale")
+	if err != nil {
+		return fmt.Errorf("command sanitization failed: %v", err)
+	}
 	if err := cmd.Run(); err != nil {
 		return err
 	}
@@ -444,7 +470,9 @@ ExecStart=/usr/sbin/tailscaled --state=/var/lib/tailscale/tailscaled.state --soc
 	}
 
 	// Reload systemd
-	exec.Command("systemctl", "daemon-reload").Run()
+	if cmd, err := utils.SafeCommand("systemctl", "daemon-reload"); err == nil {
+		cmd.Run()
+	}
 
 	return nil
 }
@@ -456,11 +484,15 @@ func (s *OverlayService) joinMeshLocal(fqdn string, meshDomain string) error {
 
 	// First ensure headscale service is running
 	fmt.Printf("DEBUG: Ensuring headscale service is running\n")
-	startCmd := exec.Command("systemctl", "start", "headscale")
-	startOutput, startErr := startCmd.CombinedOutput()
-	if startErr != nil {
-		fmt.Printf("DEBUG: Headscale start output: %s\n", string(startOutput))
-		fmt.Printf("DEBUG: Headscale start error: %v\n", startErr)
+	startCmd, startCmdErr := utils.SafeCommand("systemctl", "start", "headscale")
+	if startCmdErr != nil {
+		fmt.Printf("DEBUG: Command sanitization failed: %v\n", startCmdErr)
+	} else {
+		startOutput, startErr := startCmd.CombinedOutput()
+		if startErr != nil {
+			fmt.Printf("DEBUG: Headscale start output: %s\n", string(startOutput))
+			fmt.Printf("DEBUG: Headscale start error: %v\n", startErr)
+		}
 	}
 
 	// Wait longer for headscale to fully start with better health checking
@@ -469,7 +501,11 @@ func (s *OverlayService) joinMeshLocal(fqdn string, meshDomain string) error {
 
 	// Add health check loop
 	for i := 0; i < 15; i++ {
-		statusCmd := exec.Command("systemctl", "is-active", "headscale")
+		statusCmd, statusCmdErr := utils.SafeCommand("systemctl", "is-active", "headscale")
+		if statusCmdErr != nil {
+			fmt.Printf("DEBUG: Command sanitization failed: %v\n", statusCmdErr)
+			break
+		}
 		statusOutput, statusErr := statusCmd.Output()
 		if statusErr == nil && strings.TrimSpace(string(statusOutput)) == "active" {
 			fmt.Printf("DEBUG: Headscale is active after %d attempts\n", i+1)
@@ -482,7 +518,11 @@ func (s *OverlayService) joinMeshLocal(fqdn string, meshDomain string) error {
 	// Additional check - test if headscale CLI can connect
 	fmt.Printf("DEBUG: Testing Headscale CLI connectivity\n")
 	for i := 0; i < 10; i++ {
-		testCmd := exec.Command("headscale", "users", "list", "-c", "/etc/headscale/config.yaml")
+		testCmd, testCmdErr := utils.SafeCommand("headscale", "users", "list", "-c", "/etc/headscale/config.yaml")
+		if testCmdErr != nil {
+			fmt.Printf("DEBUG: Command sanitization failed: %v\n", testCmdErr)
+			break
+		}
 		_, testErr := testCmd.CombinedOutput()
 		if testErr == nil {
 			fmt.Printf("DEBUG: Headscale CLI is responsive after %d attempts\n", i+1)
@@ -493,26 +533,37 @@ func (s *OverlayService) joinMeshLocal(fqdn string, meshDomain string) error {
 	}
 
 	// Check if headscale is actually running
-	statusCmd := exec.Command("systemctl", "is-active", "headscale")
-	statusOutput, statusErr := statusCmd.Output()
-	fmt.Printf("DEBUG: Headscale status: %s\n", string(statusOutput))
-	if statusErr != nil {
-		fmt.Printf("DEBUG: Headscale status check error: %v\n", statusErr)
+	statusCmd, statusCmdErr := utils.SafeCommand("systemctl", "is-active", "headscale")
+	if statusCmdErr != nil {
+		fmt.Printf("DEBUG: Command sanitization failed: %v\n", statusCmdErr)
+	} else {
+		statusOutput, statusErr := statusCmd.Output()
+		fmt.Printf("DEBUG: Headscale status: %s\n", string(statusOutput))
+		if statusErr != nil {
+			fmt.Printf("DEBUG: Headscale status check error: %v\n", statusErr)
+		}
 	}
 
 	// Create a user called 'infrastructure' and get its ID
 	fmt.Printf("DEBUG: Creating infrastructure user\n")
-	userCmd := exec.Command("headscale", "users", "create", "infrastructure", "-c", "/etc/headscale/config.yaml")
-	userOutput, userErr := userCmd.CombinedOutput()
-	if userErr != nil {
-		// If it fails because the user already exists, that's fine
-		fmt.Printf("DEBUG: User creation output: %s\n", string(userOutput))
-		fmt.Printf("DEBUG: User might already exist, continuing...\n")
+	userCmd, userCmdErr := utils.SafeCommand("headscale", "users", "create", "infrastructure", "-c", "/etc/headscale/config.yaml")
+	if userCmdErr != nil {
+		fmt.Printf("DEBUG: Command sanitization failed: %v\n", userCmdErr)
+	} else {
+		userOutput, userErr := userCmd.CombinedOutput()
+		if userErr != nil {
+			// If it fails because the user already exists, that's fine
+			fmt.Printf("DEBUG: User creation output: %s\n", string(userOutput))
+			fmt.Printf("DEBUG: User might already exist, continuing...\n")
+		}
 	}
 
 	// Get the user ID for the infrastructure user
 	fmt.Printf("DEBUG: Getting infrastructure user ID\n")
-	listCmd := exec.Command("headscale", "users", "list", "-c", "/etc/headscale/config.yaml", "-o", "json")
+	listCmd, listCmdErr := utils.SafeCommand("headscale", "users", "list", "-c", "/etc/headscale/config.yaml", "-o", "json")
+	if listCmdErr != nil {
+		return fmt.Errorf("command sanitization failed: %v", listCmdErr)
+	}
 	listOutput, listErr := listCmd.CombinedOutput()
 	if listErr != nil {
 		return fmt.Errorf("failed to list users: %v, output: %s", listErr, string(listOutput))
@@ -543,7 +594,10 @@ func (s *OverlayService) joinMeshLocal(fqdn string, meshDomain string) error {
 
 	// Generate a pre-auth key for this server using the user ID
 	fmt.Printf("DEBUG: Creating pre-auth key for infrastructure user (ID: %d)\n", userID)
-	cmd := exec.Command("headscale", "preauthkeys", "create", "--reusable", "--expiration", "131400h", "-u", fmt.Sprintf("%d", userID), "-c", "/etc/headscale/config.yaml", "-o", "json")
+	cmd, cmdErr := utils.SafeCommand("headscale", "preauthkeys", "create", "--reusable", "--expiration", "131400h", "-u", fmt.Sprintf("%d", userID), "-c", "/etc/headscale/config.yaml", "-o", "json")
+	if cmdErr != nil {
+		return fmt.Errorf("command sanitization failed: %v", cmdErr)
+	}
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// Add more detailed error information
@@ -551,14 +605,16 @@ func (s *OverlayService) joinMeshLocal(fqdn string, meshDomain string) error {
 		fmt.Printf("DEBUG: Command output: %s\n", string(output))
 
 		// Check if Headscale is actually running
-		statusCmd := exec.Command("systemctl", "status", "headscale")
-		statusOutput, _ := statusCmd.CombinedOutput()
-		fmt.Printf("DEBUG: Headscale service status: %s\n", string(statusOutput))
+		if statusCmd, statusErr := utils.SafeCommand("systemctl", "status", "headscale"); statusErr == nil {
+			statusOutput, _ := statusCmd.CombinedOutput()
+			fmt.Printf("DEBUG: Headscale service status: %s\n", string(statusOutput))
+		}
 
 		// Try to get more detailed logs
-		logCmd := exec.Command("journalctl", "-u", "headscale", "--no-pager", "-n", "20")
-		logOutput, _ := logCmd.CombinedOutput()
-		fmt.Printf("DEBUG: Recent Headscale logs: %s\n", string(logOutput))
+		if logCmd, logErr := utils.SafeCommand("journalctl", "-u", "headscale", "--no-pager", "-n", "20"); logErr == nil {
+			logOutput, _ := logCmd.CombinedOutput()
+			fmt.Printf("DEBUG: Recent Headscale logs: %s\n", string(logOutput))
+		}
 
 		return fmt.Errorf("failed to create pre-auth key: %v, output: %s", err, string(output))
 	}
@@ -590,7 +646,10 @@ func (s *OverlayService) joinMeshLocal(fqdn string, meshDomain string) error {
 	}
 
 	// Join mesh using localhost
-	joinCmd := exec.Command("tailscale", "up", "--authkey", authKey, "--login-server", loginServer, "--accept-routes", "--accept-dns=false", "--hostname", serverHostname)
+	joinCmd, joinCmdErr := utils.SafeCommand("tailscale", "up", "--authkey", authKey, "--login-server", loginServer, "--accept-routes", "--accept-dns=false", "--hostname", serverHostname)
+	if joinCmdErr != nil {
+		return fmt.Errorf("command sanitization failed: %v", joinCmdErr)
+	}
 	joinOutput, joinErr := joinCmd.CombinedOutput()
 	if joinErr != nil {
 		return fmt.Errorf("failed to join mesh via localhost: %v, output: %s", joinErr, string(joinOutput))
@@ -603,7 +662,10 @@ func (s *OverlayService) joinMeshLocal(fqdn string, meshDomain string) error {
 // AddMachine generates scripts for joining a new machine
 func (s *OverlayService) AddMachine(name string) (*JoinScripts, error) {
 	// Generate pre-auth key
-	cmd := exec.Command("headscale", "preauthkey", "create", "--reusable", "--expiration", "8760h")
+	cmd, cmdErr := utils.SafeCommand("headscale", "preauthkey", "create", "--reusable", "--expiration", "8760h")
+	if cmdErr != nil {
+		return nil, fmt.Errorf("command sanitization failed: %v", cmdErr)
+	}
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -697,22 +759,25 @@ sudo systemctl enable --now tailscaled`, name, authKey, serverURL)
 func (s *OverlayService) GetOverlayStatus() (map[string]interface{}, error) {
 	// Check if Headscale is running
 	headscaleActive := false
-	cmd := exec.Command("systemctl", "is-active", "headscale")
-	if err := cmd.Run(); err == nil {
+	cmd, cmdErr := utils.SafeCommand("systemctl", "is-active", "headscale")
+	if cmdErr == nil && cmd.Run() == nil {
 		headscaleActive = true
 	}
 
 	// Check if Tailscale is running
 	tailscaleActive := false
-	cmd = exec.Command("systemctl", "is-active", "tailscaled")
-	if err := cmd.Run(); err == nil {
+	cmd, cmdErr = utils.SafeCommand("systemctl", "is-active", "tailscaled")
+	if cmdErr == nil && cmd.Run() == nil {
 		tailscaleActive = true
 	}
 
 	// Get Tailscale status
 	var ip, hostname string
 	if tailscaleActive {
-		cmd = exec.Command("tailscale", "status", "--json")
+		cmd, cmdErr = utils.SafeCommand("tailscale", "status", "--json")
+		if cmdErr != nil {
+			return nil, fmt.Errorf("command sanitization failed: %v", cmdErr)
+		}
 		output, err := cmd.Output()
 		if err == nil {
 			status := string(output)
@@ -802,11 +867,17 @@ func (s *OverlayService) fixDNSForwarder() error {
 
 	// Configure Samba DNS forwarder using samba-tool
 	for _, dnsServer := range systemDNS {
-		cmd := exec.Command("samba-tool", "dns", "add", "127.0.0.1", ".", "NS", "forwarder", dnsServer)
+		cmd, cmdErr := utils.SafeCommand("samba-tool", "dns", "add", "127.0.0.1", ".", "NS", "forwarder", dnsServer)
+		if cmdErr != nil {
+			fmt.Printf("WARNING: Command sanitization failed for dns add: %v\n", cmdErr)
+			continue
+		}
 		if err := cmd.Run(); err != nil {
 			// Try alternative method
-			cmd = exec.Command("samba-tool", "domain", "settings", "set", "dns", "forwarder", dnsServer)
-			if err := cmd.Run(); err != nil {
+			cmd, cmdErr = utils.SafeCommand("samba-tool", "domain", "settings", "set", "dns", "forwarder", dnsServer)
+			if cmdErr != nil {
+				fmt.Printf("WARNING: Command sanitization failed for settings set: %v\n", cmdErr)
+			} else if err := cmd.Run(); err != nil {
 				fmt.Printf("WARNING: Failed to set DNS forwarder %s: %v\n", dnsServer, err)
 			}
 		}
@@ -830,8 +901,12 @@ ReadEtcHosts=yes`
 	}
 
 	// Restart services to apply DNS changes
-	exec.Command("systemctl", "restart", "systemd-resolved").Run()
-	exec.Command("systemctl", "restart", "samba-ad-dc").Run()
+	if cmd, err := utils.SafeCommand("systemctl", "restart", "systemd-resolved"); err == nil {
+		cmd.Run()
+	}
+	if cmd, err := utils.SafeCommand("systemctl", "restart", "samba-ad-dc"); err == nil {
+		cmd.Run()
+	}
 
 	return nil
 }
@@ -867,7 +942,16 @@ func (s *OverlayService) TestFQDNWithListener(fqdn string) (map[string]interface
 	fmt.Printf("DEBUG: Testing FQDN with temporary listener: %s\n", fqdn)
 
 	// First check DNS resolution
-	dnsCmd := exec.Command("nslookup", fqdn)
+	dnsCmd, dnsCmdErr := utils.SafeCommand("nslookup", fqdn)
+	if dnsCmdErr != nil {
+		return map[string]interface{}{
+			"accessible":  false,
+			"reason":      "Command sanitization failed",
+			"details":     dnsCmdErr.Error(),
+			"can_proceed": true,
+			"message":     "Command validation failed, but you can proceed with setup",
+		}, nil
+	}
 	dnsOutput, dnsErr := dnsCmd.CombinedOutput()
 
 	if dnsErr != nil {
@@ -885,8 +969,15 @@ func (s *OverlayService) TestFQDNWithListener(fqdn string) (map[string]interface
 
 	// Check if port 50443 is already in use
 	fmt.Printf("DEBUG: Checking if port 50443 is available\n")
-	checkCmd := exec.Command("netstat", "-tlnp")
-	checkOutput, checkErr := checkCmd.Output()
+	checkCmd, checkCmdErr := utils.SafeCommand("netstat", "-tlnp")
+	if checkCmdErr != nil {
+		fmt.Printf("WARNING: Command sanitization failed for netstat: %v\n", checkCmdErr)
+	}
+	var checkOutput []byte
+	var checkErr error
+	if checkCmdErr == nil {
+		checkOutput, checkErr = checkCmd.Output()
+	}
 	if checkErr == nil {
 		outputStr := string(checkOutput)
 		if strings.Contains(outputStr, ":50443") {
@@ -981,8 +1072,16 @@ func (s *OverlayService) TestFQDNWithListener(fqdn string) (map[string]interface
 
 	// First test local connectivity to make sure our listener is working
 	fmt.Printf("DEBUG: Testing local listener on port %d\n", testPort)
-	localTestCmd := exec.Command("curl", "-v", "--connect-timeout", "5", fmt.Sprintf("http://127.0.0.1:%d", testPort))
-	localOutput, localErr := localTestCmd.CombinedOutput()
+	localTestCmd, localTestCmdErr := utils.SafeCommand("curl", "-v", "--connect-timeout", "5", fmt.Sprintf("http://127.0.0.1:%d", testPort))
+	var localOutput []byte
+	var localErr error
+	if localTestCmdErr != nil {
+		fmt.Printf("WARNING: Command sanitization failed for curl: %v\n", localTestCmdErr)
+		localOutput = []byte{}
+		localErr = localTestCmdErr
+	} else {
+		localOutput, localErr = localTestCmd.CombinedOutput()
+	}
 	localCode := "000" // Default to failure
 
 	// Parse the output to get HTTP status code
@@ -1003,14 +1102,23 @@ func (s *OverlayService) TestFQDNWithListener(fqdn string) (map[string]interface
 
 	// Also test using the server's LAN IP address
 	// Get the server's LAN IP address
-	lanIPCmd := exec.Command("hostname", "-I")
-	lanIPOutput, _ := lanIPCmd.Output()
+	lanIPCmd, lanIPCmdErr := utils.SafeCommand("hostname", "-I")
+	var lanIPOutput []byte
+	if lanIPCmdErr == nil {
+		lanIPOutput, _ = lanIPCmd.Output()
+	}
 	lanIP := strings.TrimSpace(strings.Split(string(lanIPOutput), " ")[0])
 
 	if lanIP != "" {
 		fmt.Printf("DEBUG: Testing with LAN IP %s on port %d\n", lanIP, testPort)
-		lanTestCmd := exec.Command("curl", "-v", "--connect-timeout", "5", fmt.Sprintf("http://%s:%d", lanIP, testPort))
-		lanOutput, lanErr := lanTestCmd.CombinedOutput()
+		lanTestCmd, lanTestCmdErr := utils.SafeCommand("curl", "-v", "--connect-timeout", "5", fmt.Sprintf("http://%s:%d", lanIP, testPort))
+		var lanOutput []byte
+		var lanErr error
+		if lanTestCmdErr != nil {
+			fmt.Printf("WARNING: Command sanitization failed for curl: %v\n", lanTestCmdErr)
+		} else {
+			lanOutput, lanErr = lanTestCmd.CombinedOutput()
+		}
 
 		fmt.Printf("DEBUG: LAN IP curl output: %s\n", string(lanOutput))
 		fmt.Printf("DEBUG: LAN IP curl error: %v\n", lanErr)
@@ -1024,8 +1132,16 @@ func (s *OverlayService) TestFQDNWithListener(fqdn string) (map[string]interface
 
 	// Now test external FQDN accessibility
 	fmt.Printf("DEBUG: Testing external FQDN accessibility via port 50443\n")
-	testCmd := exec.Command("curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "--connect-timeout", "10", fmt.Sprintf("http://%s:50443", fqdn))
-	testOutput, testErr := testCmd.CombinedOutput()
+	testCmd, testCmdErr := utils.SafeCommand("curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "--connect-timeout", "10", fmt.Sprintf("http://%s:50443", fqdn))
+	var testOutput []byte
+	var testErr error
+	if testCmdErr != nil {
+		fmt.Printf("WARNING: Command sanitization failed for curl: %v\n", testCmdErr)
+		testOutput = []byte("000")
+		testErr = testCmdErr
+	} else {
+		testOutput, testErr = testCmd.CombinedOutput()
+	}
 	testCode := strings.TrimSpace(string(testOutput))
 
 	// Stop the temporary server
@@ -1078,7 +1194,16 @@ func (s *OverlayService) TestFQDNAccessibility(fqdn string) (map[string]interfac
 	fmt.Printf("DEBUG: Testing FQDN accessibility for: %s\n", fqdn)
 
 	// Test basic DNS resolution first
-	dnsCmd := exec.Command("nslookup", fqdn)
+	dnsCmd, dnsCmdErr := utils.SafeCommand("nslookup", fqdn)
+	if dnsCmdErr != nil {
+		return map[string]interface{}{
+			"accessible":  false,
+			"reason":      "Command sanitization failed",
+			"details":     dnsCmdErr.Error(),
+			"can_proceed": true,
+			"message":     "Command validation failed, but you can proceed with setup",
+		}, nil
+	}
 	dnsOutput, dnsErr := dnsCmd.CombinedOutput()
 
 	if dnsErr != nil {
@@ -1095,15 +1220,31 @@ func (s *OverlayService) TestFQDNAccessibility(fqdn string) (map[string]interfac
 	fmt.Printf("DEBUG: DNS resolution successful: %s\n", string(dnsOutput))
 
 	// Test Tailscale port 50443 connectivity
-	tailscaleCmd := exec.Command("curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "--connect-timeout", "10", fmt.Sprintf("http://%s:50443", fqdn))
-	tailscaleOutput, tailscaleErr := tailscaleCmd.CombinedOutput()
+	tailscaleCmd, tailscaleCmdErr := utils.SafeCommand("curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "--connect-timeout", "10", fmt.Sprintf("http://%s:50443", fqdn))
+	var tailscaleOutput []byte
+	var tailscaleErr error
+	if tailscaleCmdErr != nil {
+		fmt.Printf("WARNING: Command sanitization failed for curl: %v\n", tailscaleCmdErr)
+		tailscaleOutput = []byte("000")
+		tailscaleErr = tailscaleCmdErr
+	} else {
+		tailscaleOutput, tailscaleErr = tailscaleCmd.CombinedOutput()
+	}
 	tailscaleCode := strings.TrimSpace(string(tailscaleOutput))
 
 	fmt.Printf("DEBUG: Tailscale port 50443 test: code=%s, err=%v\n", tailscaleCode, tailscaleErr)
 
 	// Also test basic HTTP connectivity on port 80 as secondary check
-	httpCmd := exec.Command("curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "--connect-timeout", "10", fmt.Sprintf("http://%s", fqdn))
-	httpOutput, httpErr := httpCmd.CombinedOutput()
+	httpCmd, httpCmdErr := utils.SafeCommand("curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "--connect-timeout", "10", fmt.Sprintf("http://%s", fqdn))
+	var httpOutput []byte
+	var httpErr error
+	if httpCmdErr != nil {
+		fmt.Printf("WARNING: Command sanitization failed for curl: %v\n", httpCmdErr)
+		httpOutput = []byte("000")
+		httpErr = httpCmdErr
+	} else {
+		httpOutput, httpErr = httpCmd.CombinedOutput()
+	}
 	httpCode := strings.TrimSpace(string(httpOutput))
 
 	fmt.Printf("DEBUG: HTTP test on port 80: code=%s, err=%v\n", httpCode, httpErr)

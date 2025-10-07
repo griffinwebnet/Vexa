@@ -1,8 +1,9 @@
 package exec
 
 import (
-	"os/exec"
 	"runtime"
+
+	"github.com/griffinwebnet/vexa/api/utils"
 )
 
 // System provides an interface for system-level operations
@@ -15,7 +16,10 @@ func NewSystem() *System {
 
 // CheckCommandExists checks if a command exists in the system PATH
 func (s *System) CheckCommandExists(command string) bool {
-	cmd := exec.Command("which", command)
+	cmd, err := utils.SafeCommand("which", command)
+	if err != nil {
+		return false
+	}
 	return cmd.Run() == nil
 }
 
@@ -31,37 +35,55 @@ func (s *System) GetArchitecture() string {
 
 // ServiceStatus checks the status of a system service
 func (s *System) ServiceStatus(serviceName string) (bool, error) {
-	cmd := exec.Command("systemctl", "is-active", serviceName)
+	cmd, cmdErr := utils.SafeCommand("systemctl", "is-active", serviceName)
+	if cmdErr != nil {
+		return false, cmdErr
+	}
 	err := cmd.Run()
 	return err == nil, err
 }
 
 // EnableAndStartService enables and starts a system service
 func (s *System) EnableAndStartService(serviceName string) error {
-	cmd := exec.Command("systemctl", "enable", "--now", serviceName)
+	cmd, err := utils.SafeCommand("systemctl", "enable", "--now", serviceName)
+	if err != nil {
+		return err
+	}
 	return cmd.Run()
 }
 
 // StopService stops a system service
 func (s *System) StopService(serviceName string) error {
-	cmd := exec.Command("systemctl", "stop", serviceName)
+	cmd, err := utils.SafeCommand("systemctl", "stop", serviceName)
+	if err != nil {
+		return err
+	}
 	return cmd.Run()
 }
 
 // RemoveFile removes a file from the filesystem
 func (s *System) RemoveFile(path string) error {
-	cmd := exec.Command("rm", "-f", path)
+	cmd, err := utils.SafeCommand("rm", "-f", path)
+	if err != nil {
+		return err
+	}
 	return cmd.Run()
 }
 
 // RunCommand executes a command with arguments
 func (s *System) RunCommand(name string, args ...string) error {
-	cmd := exec.Command(name, args...)
+	cmd, err := utils.SafeCommand(name, args...)
+	if err != nil {
+		return err
+	}
 	return cmd.Run()
 }
 
 // FileExists checks if a file exists on the filesystem
 func (s *System) FileExists(path string) bool {
-	cmd := exec.Command("test", "-f", path)
+	cmd, err := utils.SafeCommand("test", "-f", path)
+	if err != nil {
+		return false
+	}
 	return cmd.Run() == nil
 }

@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
+
+	"github.com/griffinwebnet/vexa/api/utils"
 )
 
 // DDNSProvider represents a DDNS provider configuration
@@ -39,11 +40,19 @@ func (s *DDNSService) SetupDDNS(provider *DDNSProvider) error {
 
 	// Start/stop service based on enabled state
 	if provider.Enabled {
-		if err := exec.Command("systemctl", "enable", "--now", "ddclient").Run(); err != nil {
+		cmd, cmdErr := utils.SafeCommand("systemctl", "enable", "--now", "ddclient")
+		if cmdErr != nil {
+			return fmt.Errorf("command sanitization failed: %v", cmdErr)
+		}
+		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("failed to start ddclient: %v", err)
 		}
 	} else {
-		if err := exec.Command("systemctl", "disable", "--now", "ddclient").Run(); err != nil {
+		cmd, cmdErr := utils.SafeCommand("systemctl", "disable", "--now", "ddclient")
+		if cmdErr != nil {
+			return fmt.Errorf("command sanitization failed: %v", cmdErr)
+		}
+		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("failed to stop ddclient: %v", err)
 		}
 	}

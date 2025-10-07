@@ -2,7 +2,8 @@ package exec
 
 import (
 	"encoding/json"
-	"os/exec"
+
+	"github.com/griffinwebnet/vexa/api/utils"
 )
 
 // HeadscaleTool provides an interface for executing headscale commands
@@ -15,7 +16,10 @@ func NewHeadscaleTool() *HeadscaleTool {
 
 // Run executes a headscale command with the given arguments
 func (h *HeadscaleTool) Run(args ...string) (string, error) {
-	cmd := exec.Command("headscale", args...)
+	cmd, cmdErr := utils.SafeCommand("headscale", args...)
+	if cmdErr != nil {
+		return "", cmdErr
+	}
 	output, err := cmd.CombinedOutput()
 	return string(output), err
 }

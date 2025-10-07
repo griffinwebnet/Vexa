@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	vexaexec "github.com/griffinwebnet/vexa/api/exec"
+	"github.com/griffinwebnet/vexa/api/utils"
 )
 
 // HeadscaleService handles Headscale-related business logic
@@ -73,7 +73,10 @@ func (s *HeadscaleService) GetInfrastructureKey() (string, error) {
 	}
 
 	// List all pre-auth keys for the infrastructure user using the user ID
-	cmd := exec.Command("headscale", "preauthkeys", "list", "-u", fmt.Sprintf("%d", userID), "-c", "/etc/headscale/config.yaml", "-o", "json")
+	cmd, cmdErr := utils.SafeCommand("headscale", "preauthkeys", "list", "-u", fmt.Sprintf("%d", userID), "-c", "/etc/headscale/config.yaml", "-o", "json")
+	if cmdErr != nil {
+		return "", fmt.Errorf("command sanitization failed: %v", cmdErr)
+	}
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to list pre-auth keys: %v", err)
@@ -102,7 +105,10 @@ func (s *HeadscaleService) GetInfrastructureKey() (string, error) {
 
 // getInfrastructureUserID gets the numeric ID of the infrastructure user
 func (s *HeadscaleService) getInfrastructureUserID() (int, error) {
-	cmd := exec.Command("headscale", "users", "list", "-c", "/etc/headscale/config.yaml", "-o", "json")
+	cmd, cmdErr := utils.SafeCommand("headscale", "users", "list", "-c", "/etc/headscale/config.yaml", "-o", "json")
+	if cmdErr != nil {
+		return 0, fmt.Errorf("command sanitization failed: %v", cmdErr)
+	}
 	output, err := cmd.Output()
 	if err != nil {
 		return 0, fmt.Errorf("failed to list users: %v", err)
@@ -133,7 +139,10 @@ func (s *HeadscaleService) IsEnabled() bool {
 	}
 
 	// Check if Headscale service is running
-	cmd := exec.Command("systemctl", "is-active", "headscale")
+	cmd, err := utils.SafeCommand("systemctl", "is-active", "headscale")
+	if err != nil {
+		return false
+	}
 	return cmd.Run() == nil
 }
 
