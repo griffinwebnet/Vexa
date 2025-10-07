@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import api from '../lib/api'
 
 // Get version from package.json
-const VERSION = '0.3.112'
+const VERSION = '0.3.114'
 
 export default function LoginPage() {
   const navigate = useNavigate()

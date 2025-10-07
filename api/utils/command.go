@@ -151,6 +151,14 @@ func NewCommandSanitizer() *CommandSanitizer {
 				},
 				MaxArgs: 2,
 			},
+			"stat": {
+				Allowed:    true,
+				StaticArgs: []string{"-c", "%y"},
+				PositionalArgs: map[int]ArgValidator{
+					2: isSafePath,
+				},
+				MaxArgs: 3,
+			},
 			"rm": {
 				Allowed:    true,
 				StaticArgs: []string{"-f"},
@@ -181,7 +189,7 @@ func NewCommandSanitizer() *CommandSanitizer {
 			// Samba commands
 			"samba-tool": {
 				Allowed:    true,
-				StaticArgs: []string{"domain", "info", "user", "create", "list", "group", "dns", "add", "settings", "set", "127.0.0.1", "ou", "delete"},
+				StaticArgs: []string{"domain", "info", "user", "create", "list", "group", "dns", "add", "settings", "set", "127.0.0.1", "ou", "delete", "passwordsettings", "show", "-s", "--parameter-name", "computer"},
 				PositionalArgs: map[int]ArgValidator{
 					1: isSafeSambaArg,
 				},
@@ -247,7 +255,7 @@ func NewCommandSanitizer() *CommandSanitizer {
 			// Headscale/Tailscale commands
 			"headscale": {
 				Allowed:    true,
-				StaticArgs: []string{"--help", "users", "list", "create", "preauthkeys", "nodes", "migrate"},
+				StaticArgs: []string{"--help", "users", "list", "create", "preauthkeys", "nodes", "migrate", "--output", "json", "version"},
 				PositionalArgs: map[int]ArgValidator{
 					0: isSafeHeadscaleArg,
 				},
@@ -255,7 +263,7 @@ func NewCommandSanitizer() *CommandSanitizer {
 			},
 			"tailscale": {
 				Allowed:    true,
-				StaticArgs: []string{"up", "status", "debug", "prefs", "login"},
+				StaticArgs: []string{"up", "status", "debug", "prefs", "login", "--json", "--output"},
 				PositionalArgs: map[int]ArgValidator{
 					0: isSafeTailscaleArg,
 				},
@@ -265,16 +273,16 @@ func NewCommandSanitizer() *CommandSanitizer {
 			// Package management
 			"apt": {
 				Allowed:    true,
-				StaticArgs: []string{"update", "install", "-y", "autoremove", "-f"},
+				StaticArgs: []string{"update", "install", "-y", "autoremove", "-f", "list", "--upgradable"},
 				PositionalArgs: map[int]ArgValidator{
-					1: isSafePackageName,
+					2: isSafePackageName,
 				},
 				RequiresElevation: true,
-				MaxArgs:           3,
+				MaxArgs:           4,
 			},
 			"dpkg": {
 				Allowed:    true,
-				StaticArgs: []string{"-i", "--remove"},
+				StaticArgs: []string{"-i", "--remove", "-s"},
 				PositionalArgs: map[int]ArgValidator{
 					1: isSafePackageName,
 				},
@@ -583,7 +591,7 @@ func isSafeHeadscaleArg(arg string) bool {
 	allowedArgs := []string{
 		"--help", "users", "list", "create", "preauthkeys", "nodes", "migrate",
 		"infrastructure", "-c", "/etc/headscale/config.yaml", "-o", "json",
-		"--reusable", "--expiration", "131400h", "-u",
+		"--reusable", "--expiration", "131400h", "-u", "--output", "version",
 	}
 
 	for _, allowed := range allowedArgs {
@@ -605,7 +613,7 @@ func isSafeTailscaleArg(arg string) bool {
 	allowedArgs := []string{
 		"up", "status", "debug", "prefs", "login",
 		"--authkey", "--login-server", "--accept-routes", "--accept-dns=false",
-		"--hostname", "--unattended",
+		"--hostname", "--unattended", "--json", "--output",
 	}
 
 	for _, allowed := range allowedArgs {
@@ -667,6 +675,7 @@ func isSafePath(path string) bool {
 		"/var/lib/headscale/",
 		"/var/log/vexa/",
 		"/usr/local/bin/",
+		"/usr/sbin/",
 		"/etc/systemd/",
 		"/tmp/",
 		"/var/tmp/",
@@ -743,9 +752,9 @@ func isSafeCredential(cred string) bool {
 		if len(parts) == 2 {
 			username, password := parts[0], parts[1]
 			// Basic validation - only block actual shell injection characters
-			// Allow all special characters in passwords - users should be free to use whatever they want
+			// Allow most special characters in passwords including ~, !, @, #, $, ^, *, etc.
 			dangerous := []string{
-				";", "&", "|", "<", ">", "`", "$(", ")", "{", "}", "[", "]",
+				";", "&", "|", "<", ">", "`", "$(", ")", "{", "}", "[", "]", "\"", "'", "\\",
 			}
 
 			for _, danger := range dangerous {
@@ -763,10 +772,9 @@ func isSafeCredential(cred string) bool {
 
 	// Check for domain\username%password format
 	if strings.Contains(cred, "\\") && strings.Contains(cred, "%") {
-		// Similar validation for domain credentials
+		// Similar validation for domain credentials - allow most special chars except dangerous shell chars
 		dangerous := []string{
-			";", "&", "|", "<", ">", "`", "$(", ")", "{", "}", "[", "]",
-			"*", "?", "~", "!", "#", "@", "^", "/", "\"", "'",
+			";", "&", "|", "<", ">", "`", "$(", ")", "{", "}", "[", "]", "\"", "'",
 		}
 
 		for _, danger := range dangerous {
