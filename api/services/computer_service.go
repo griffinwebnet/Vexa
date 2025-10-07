@@ -129,6 +129,99 @@ func (s *ComputerService) GetComputer(computerName string) (*models.Computer, er
 	return computer, nil
 }
 
+// GetMachineDetails returns detailed information about a machine from Headscale
+func (s *ComputerService) GetMachineDetails(machineId string) (map[string]interface{}, error) {
+	// Query Headscale for machine details
+	cmd := exec.Command("headscale", "nodes", "list", "--output", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to query headscale: %v", err)
+	}
+
+	// Parse JSON to find the specific machine
+	var nodes []map[string]interface{}
+	if err := json.Unmarshal(output, &nodes); err != nil {
+		return nil, fmt.Errorf("failed to parse headscale output: %v", err)
+	}
+
+	// Find the machine by ID or name
+	for _, node := range nodes {
+		if nodeID, ok := node["id"].(string); ok && nodeID == machineId {
+			return s.formatMachineDetails(node)
+		}
+		if nodeName, ok := node["name"].(string); ok && nodeName == machineId {
+			return s.formatMachineDetails(node)
+		}
+	}
+
+	return nil, fmt.Errorf("machine not found")
+}
+
+// formatMachineDetails formats Headscale node data into our machine details format
+func (s *ComputerService) formatMachineDetails(node map[string]interface{}) (map[string]interface{}, error) {
+	// Extract basic info
+	id := fmt.Sprintf("%.0f", node["id"].(float64))
+	name := node["name"].(string)
+	
+	// Get IP addresses
+	var ipv4, ipv6 string
+	if addrs, ok := node["ipAddresses"].([]interface{}); ok {
+		for _, addr := range addrs {
+			if addrStr, ok := addr.(string); ok {
+				if strings.Contains(addrStr, ":") {
+					ipv6 = addrStr
+				} else {
+					ipv4 = addrStr
+				}
+			}
+		}
+	}
+
+	// Get timestamps
+	created := "Unknown"
+	if createdAt, ok := node["createdAt"].(string); ok {
+		created = createdAt
+	}
+
+	lastSeen := "Unknown"
+	if lastSeenTime, ok := node["lastSeen"].(string); ok {
+		lastSeen = lastSeenTime
+	}
+
+	// Get key info
+	keyExpiry := "Never"
+	if expiry, ok := node["expiry"].(string); ok && expiry != "" {
+		keyExpiry = expiry
+	}
+
+	nodeKey := "Unknown"
+	if key, ok := node["nodeKey"].(string); ok {
+		nodeKey = key
+	}
+
+	// Determine status
+	status := "offline"
+	if lastSeen != "Unknown" && lastSeen != "" {
+		status = "online"
+	}
+
+	return map[string]interface{}{
+		"id":             id,
+		"name":           name,
+		"hostname":       name,
+		"creator":        "infrastructure",
+		"created":        created,
+		"lastSeen":       lastSeen,
+		"keyExpiry":      keyExpiry,
+		"nodeKey":        nodeKey,
+		"tailscaleIPv4":  ipv4,
+		"tailscaleIPv6":  ipv6,
+		"shortDomain":    name,
+		"status":         status,
+		"managedBy":      "infrastructure",
+	}, nil
+}
+
 // DeleteComputer removes a computer from the domain
 func (s *ComputerService) DeleteComputer(computerName string) error {
 	output, err := s.sambaTool.Run("computer", "delete", computerName)
@@ -151,8 +244,31 @@ func (s *ComputerService) pingComputer(hostname string) bool {
 }
 
 func (s *ComputerService) getComputerIP(hostname string) string {
-	cmd := exec.Command("host", hostname)
+	// First try to get the actual network IP using ip command
+	cmd := exec.Command("ip", "route", "get", "1.1.1.1")
 	output, err := cmd.Output()
+	if err == nil {
+		// Parse output like "1.1.1.1 via 192.168.1.1 dev eth0 src 192.168.1.100"
+		lines := strings.Split(string(output), "\n")
+		for _, line := range lines {
+			if strings.Contains(line, "src ") {
+				parts := strings.Fields(line)
+				for i, part := range parts {
+					if part == "src" && i+1 < len(parts) {
+						ip := parts[i+1]
+						// Validate it's a real IP (not 127.x.x.x)
+						if !strings.HasPrefix(ip, "127.") && !strings.HasPrefix(ip, "100.64.") {
+							return ip
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Fallback to hostname resolution
+	cmd = exec.Command("host", hostname)
+	output, err = cmd.Output()
 	if err != nil {
 		return ""
 	}
@@ -163,7 +279,11 @@ func (s *ComputerService) getComputerIP(hostname string) string {
 		if strings.Contains(line, "has address") {
 			parts := strings.Fields(line)
 			if len(parts) >= 4 {
-				return parts[3]
+				ip := parts[3]
+				// Skip loopback and Tailscale IPs
+				if !strings.HasPrefix(ip, "127.") && !strings.HasPrefix(ip, "100.64.") {
+					return ip
+				}
 			}
 		}
 	}

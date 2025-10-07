@@ -50,6 +50,21 @@ func (h *ComputerHandler) GetComputer(c *gin.Context) {
 	c.JSON(http.StatusOK, computer)
 }
 
+// GetMachineDetails returns detailed information about a specific machine
+func (h *ComputerHandler) GetMachineDetails(c *gin.Context) {
+	machineId := c.Param("id")
+
+	details, err := h.computerService.GetMachineDetails(machineId)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "Machine not found",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, details)
+}
+
 // DeleteComputer removes a computer from the domain
 func (h *ComputerHandler) DeleteComputer(c *gin.Context) {
 	computerName := c.Param("id")

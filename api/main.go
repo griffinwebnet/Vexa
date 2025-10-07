@@ -13,7 +13,7 @@ import (
 // Global dev mode flag
 var DevMode bool
 
-const Version = "0.2.93"
+const Version = "0.2.94"
 
 func main() {
 	// Parse command line flags
@@ -100,6 +100,7 @@ func main() {
 		// Computer/Device management
 		protected.GET("/computers", computerHandler.ListComputers)
 		protected.GET("/computers/:id", computerHandler.GetComputer)
+		protected.GET("/machines/:id", computerHandler.GetMachineDetails)
 		protected.DELETE("/computers/:id", computerHandler.DeleteComputer)
 
 		// DNS management

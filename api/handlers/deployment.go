@@ -116,11 +116,7 @@ func (h *DeploymentHandler) GenerateDeploymentCommand(c *gin.Context) {
 	switch req.ScriptType {
 	case "tailscale-domain":
 		scriptName = "domain-join-with-tailscale.ps1"
-		command = fmt.Sprintf(`powershell -ExecutionPolicy Bypass -Command "& {
-			$scriptUrl = '%s/api/deployment/scripts/%s'
-			$scriptContent = Invoke-WebRequest -Uri $scriptUrl -UseBasicParsing | Select-Object -ExpandProperty Content
-			Invoke-Expression $scriptContent
-		}"`, getBaseURL(c), scriptName)
+		command = fmt.Sprintf(`powershell -ExecutionPolicy Bypass -File ".\%s"`, scriptName)
 
 		// Add parameters
 		if req.DomainName != "" {
@@ -138,11 +134,7 @@ func (h *DeploymentHandler) GenerateDeploymentCommand(c *gin.Context) {
 
 	case "domain-only":
 		scriptName = "domain-join-only.ps1"
-		command = fmt.Sprintf(`powershell -ExecutionPolicy Bypass -Command "& {
-			$scriptUrl = '%s/api/deployment/scripts/%s'
-			$scriptContent = Invoke-WebRequest -Uri $scriptUrl -UseBasicParsing | Select-Object -ExpandProperty Content
-			Invoke-Expression $scriptContent
-		}"`, getBaseURL(c), scriptName)
+		command = fmt.Sprintf(`powershell -ExecutionPolicy Bypass -File ".\%s"`, scriptName)
 
 		if req.DomainName != "" {
 			command += fmt.Sprintf(` -DomainName "%s"`, req.DomainName)
@@ -153,11 +145,7 @@ func (h *DeploymentHandler) GenerateDeploymentCommand(c *gin.Context) {
 
 	case "tailnet-add":
 		scriptName = "tailnet-add.ps1"
-		command = fmt.Sprintf(`powershell -ExecutionPolicy Bypass -Command "& {
-			$scriptUrl = '%s/api/deployment/scripts/%s'
-			$scriptContent = Invoke-WebRequest -Uri $scriptUrl -UseBasicParsing | Select-Object -ExpandProperty Content
-			Invoke-Expression $scriptContent
-		}"`, getBaseURL(c), scriptName)
+		command = fmt.Sprintf(`powershell -ExecutionPolicy Bypass -File ".\%s"`, scriptName)
 
 		if authKey != "" {
 			command += fmt.Sprintf(` -TailscaleAuthKey "%s"`, authKey)

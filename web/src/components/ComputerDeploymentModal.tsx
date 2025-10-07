@@ -4,6 +4,7 @@ import { Button } from './ui/Button'
 import { Card } from './ui/Card'
 import { 
   Monitor, 
+  Download,
   Copy, 
   CheckCircle, 
   AlertCircle,
@@ -39,7 +40,7 @@ export default function ComputerDeploymentModal({
 }: ComputerDeploymentModalProps) {
   const [selectedScript, setSelectedScript] = useState<string>('')
   const [generatedCommand, setGeneratedCommand] = useState<string>('')
-  const [, setIsGenerating] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
   const [copied, setCopied] = useState(false)
   const [deploymentScripts, setDeploymentScripts] = useState<DeploymentScript[]>([])
   const [headscaleEnabled, setHeadscaleEnabled] = useState(true)
@@ -54,10 +55,10 @@ export default function ComputerDeploymentModal({
 
   // Auto-generate command when script is selected
   useEffect(() => {
-    if (selectedScript && !generatedCommand) {
+    if (selectedScript && !generatedCommand && !isGenerating) {
       generateCommand()
     }
-  }, [selectedScript, generatedCommand])
+  }, [selectedScript])
 
   const fetchDeploymentScripts = async () => {
     setIsLoadingScripts(true)
@@ -126,6 +127,36 @@ export default function ComputerDeploymentModal({
       setTimeout(() => setCopied(false), 2000)
     } catch (error) {
       console.error('Failed to copy to clipboard:', error)
+    }
+  }
+
+  const downloadScript = async () => {
+    try {
+      // Get the script content from the API
+      const response = await api.get(`/deployment/scripts/${getScriptFileName()}`)
+      const scriptContent = response.data
+      
+      // Create blob and download
+      const blob = new Blob([scriptContent], { type: 'text/plain' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = getScriptFileName()
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Failed to download script:', error)
+    }
+  }
+
+  const getScriptFileName = () => {
+    switch (selectedScript) {
+      case 'tailscale-domain': return 'domain-join-with-tailscale.ps1'
+      case 'domain-only': return 'domain-join-only.ps1'
+      case 'tailnet-add': return 'tailnet-add.ps1'
+      default: return 'deployment-script.ps1'
     }
   }
 
@@ -228,32 +259,42 @@ export default function ComputerDeploymentModal({
             </div>
           )}
 
-          {/* Generated Command */}
+          {/* Generated Script */}
           {generatedCommand && (
             <div>
-              <h3 className="text-lg font-semibold mb-4">Deployment Command</h3>
+              <h3 className="text-lg font-semibold mb-4">Deployment Script</h3>
               <Card>
                 <div className="p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-sm font-medium">Copy and run this command in PowerShell as Administrator:</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={copyToClipboard}
-                      disabled={copied}
-                    >
-                      {copied ? (
-                        <>
-                          <CheckCircle className="h-4 w-4 mr-2 text-green-500" />
-                          Copied!
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-4 w-4 mr-2" />
-                          Copy
-                        </>
-                      )}
-                    </Button>
+                    <p className="text-sm font-medium">Download the PowerShell script:</p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => downloadScript()}
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Download Script
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={copyToClipboard}
+                        disabled={copied}
+                      >
+                        {copied ? (
+                          <>
+                            <CheckCircle className="h-4 w-4 mr-2 text-green-500" />
+                            Copied!
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-4 w-4 mr-2" />
+                            Copy Command
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </div>
                   <pre className="bg-muted p-3 rounded-lg text-sm overflow-x-auto">
                     <code>{generatedCommand}</code>
@@ -267,10 +308,11 @@ export default function ComputerDeploymentModal({
                   Instructions
                 </h4>
                 <ol className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
-                  <li>1. Copy the command above</li>
-                  <li>2. Open PowerShell as Administrator</li>
-                  <li>3. Paste and run the command</li>
-                  <li>4. Follow the on-screen prompts</li>
+                  <li>1. Download the PowerShell script to a USB drive</li>
+                  <li>2. Copy the script to the target computer</li>
+                  <li>3. Open PowerShell as Administrator on the target computer</li>
+                  <li>4. Run the command above to execute the script</li>
+                  <li>5. Follow the on-screen prompts</li>
                 </ol>
               </div>
             </div>
