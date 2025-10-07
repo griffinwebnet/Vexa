@@ -51,7 +51,7 @@ func NewCommandSanitizer() *CommandSanitizer {
 				Allowed:    true,
 				StaticArgs: []string{"-u", "-g", "-G", "-n", "-nG"},
 				PositionalArgs: map[int]ArgValidator{
-					0: isSafeUsername,
+					1: isSafeUsername,
 				},
 				MaxArgs: 3,
 			},
