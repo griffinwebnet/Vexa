@@ -718,10 +718,10 @@ func isSafeCredential(cred string) bool {
 		parts := strings.Split(cred, "%")
 		if len(parts) == 2 {
 			username, password := parts[0], parts[1]
-			// Basic validation - no shell metacharacters
+			// Basic validation - only block actual shell injection characters
+			// Allow all special characters in passwords - users should be free to use whatever they want
 			dangerous := []string{
 				";", "&", "|", "<", ">", "`", "$(", ")", "{", "}", "[", "]",
-				"*", "?", "~", "!", "#", "@", "^", "\\", "/", "\"", "'",
 			}
 
 			for _, danger := range dangerous {
