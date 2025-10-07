@@ -255,11 +255,11 @@ func NewCommandSanitizer() *CommandSanitizer {
 			// Headscale/Tailscale commands
 			"headscale": {
 				Allowed:    true,
-				StaticArgs: []string{"--help", "users", "list", "create", "preauthkeys", "nodes", "migrate", "--output", "json", "version"},
+				StaticArgs: []string{"--help", "users", "list", "create", "preauthkeys", "nodes", "migrate", "--output", "json", "version", "-c", "/etc/headscale/config.yaml", "-o", "-u", "--reusable", "--expiration", "131400h"},
 				PositionalArgs: map[int]ArgValidator{
 					0: isSafeHeadscaleArg,
 				},
-				MaxArgs: 10,
+				MaxArgs: 15,
 			},
 			"tailscale": {
 				Allowed:    true,
