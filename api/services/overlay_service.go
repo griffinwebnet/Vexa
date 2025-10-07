@@ -1062,9 +1062,9 @@ func (s *OverlayService) TestFQDNWithListener(fqdn string) (map[string]interface
 
 	// Test if the server is actually listening
 	fmt.Printf("DEBUG: Testing if server is listening on port %d...\n", testPort)
-	testListener, testErr := net.Listen("tcp", fmt.Sprintf(":%d", testPort))
-	if testErr != nil {
-		fmt.Printf("DEBUG: Port %d is in use (good!): %v\n", testPort, testErr)
+	testListener, listenerErr := net.Listen("tcp", fmt.Sprintf(":%d", testPort))
+	if listenerErr != nil {
+		fmt.Printf("DEBUG: Port %d is in use (good!): %v\n", testPort, listenerErr)
 	} else {
 		fmt.Printf("DEBUG: Port %d is still available (bad!) - server didn't start properly\n", testPort)
 		testListener.Close()
