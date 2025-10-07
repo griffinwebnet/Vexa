@@ -55,6 +55,30 @@ func NewCommandSanitizer() *CommandSanitizer {
 				},
 				MaxArgs: 3,
 			},
+			"bash": {
+				Allowed:    true,
+				StaticArgs: []string{"./update.sh"},
+				PositionalArgs: map[int]ArgValidator{
+					0: isSafePath,
+				},
+				MaxArgs: 3,
+			},
+			"pgrep": {
+				Allowed:    true,
+				StaticArgs: []string{"-f"},
+				PositionalArgs: map[int]ArgValidator{
+					1: isSafeProcessName,
+				},
+				MaxArgs: 2,
+			},
+			"tail": {
+				Allowed:    true,
+				StaticArgs: []string{"-n"},
+				PositionalArgs: map[int]ArgValidator{
+					1: isSafePath,
+				},
+				MaxArgs: 3,
+			},
 			"ping": {
 				Allowed:    true,
 				StaticArgs: []string{"-c", "1", "-W", "1"},
@@ -279,7 +303,7 @@ func NewCommandSanitizer() *CommandSanitizer {
 			// Vexa CLI
 			"vexa": {
 				Allowed:    true,
-				StaticArgs: []string{"update", "start", "status", "--json", "log"},
+				StaticArgs: []string{"update", "start", "status", "--json", "log", "--build-source"},
 				MaxArgs:    5,
 			},
 		},
