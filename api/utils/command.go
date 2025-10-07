@@ -47,6 +47,14 @@ func NewCommandSanitizer() *CommandSanitizer {
 				StaticArgs: []string{"-I"},
 				MaxArgs:    1,
 			},
+			"id": {
+				Allowed:    true,
+				StaticArgs: []string{"-u", "-g", "-G", "-n", "-nG"},
+				PositionalArgs: map[int]ArgValidator{
+					0: isSafeUsername,
+				},
+				MaxArgs: 3,
+			},
 			"ping": {
 				Allowed:    true,
 				StaticArgs: []string{"-c", "1", "-W", "1"},
