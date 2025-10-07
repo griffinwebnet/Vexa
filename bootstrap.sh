@@ -3,7 +3,7 @@ set -e
 
 # Vexa Bootstrap Script
 echo "======================================"
-echo "  Vexa Bootstrap Installer  v0.2.95"
+echo "  Vexa Bootstrap Installer  v0.2.97"
 echo "======================================"
 echo ""
 
@@ -112,17 +112,32 @@ if [ "$NIGHTLY" = true ]; then
 else
     echo -e "${YELLOW}Fetching latest release...${NC}"
     
-    LATEST_RELEASE=$(curl -s https://api.github.com/repos/griffinwebnet/Vexa/releases/latest | jq -r '.tag_name' 2>/dev/null)
+    # Try to get the latest release with better error handling
+    RELEASE_RESPONSE=$(curl -s -w "%{http_code}" https://api.github.com/repos/griffinwebnet/Vexa/releases/latest)
+    HTTP_CODE="${RELEASE_RESPONSE: -3}"
+    RELEASE_BODY="${RELEASE_RESPONSE%???}"
     
-    echo "DEBUG: Latest release response: $LATEST_RELEASE"
+    echo "DEBUG: HTTP response code: $HTTP_CODE"
     
-    if [ -n "$LATEST_RELEASE" ] && [ "$LATEST_RELEASE" != "null" ] && [ "$LATEST_RELEASE" != "" ]; then
-        echo "Latest release found: $LATEST_RELEASE"
-        git clone --branch "$LATEST_RELEASE" --depth 1 https://github.com/griffinwebnet/Vexa.git
-        cd Vexa
-        CURRENT_VERSION="$LATEST_RELEASE"
+    if [ "$HTTP_CODE" = "200" ]; then
+        LATEST_RELEASE=$(echo "$RELEASE_BODY" | jq -r '.tag_name' 2>/dev/null)
+        echo "DEBUG: Latest release tag: $LATEST_RELEASE"
+        
+        if [ -n "$LATEST_RELEASE" ] && [ "$LATEST_RELEASE" != "null" ] && [ "$LATEST_RELEASE" != "" ]; then
+            echo "Latest release found: $LATEST_RELEASE"
+            git clone --branch "$LATEST_RELEASE" --depth 1 https://github.com/griffinwebnet/Vexa.git
+            cd Vexa
+            CURRENT_VERSION="$LATEST_RELEASE"
+        else
+            echo -e "${YELLOW}Could not parse release tag, using main branch...${NC}"
+            git clone https://github.com/griffinwebnet/Vexa.git
+            cd Vexa
+            git checkout master 2>/dev/null || git checkout main 2>/dev/null || true
+            CURRENT_VERSION="main-$(git rev-parse --short HEAD)"
+            echo "Using development version: $CURRENT_VERSION"
+        fi
     else
-        echo -e "${YELLOW}Could not fetch latest release, using main branch...${NC}"
+        echo -e "${YELLOW}Could not fetch releases (HTTP $HTTP_CODE), using main branch...${NC}"
         git clone https://github.com/griffinwebnet/Vexa.git
         cd Vexa
         git checkout master 2>/dev/null || git checkout main 2>/dev/null || true

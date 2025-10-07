@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -61,6 +62,33 @@ func (s *HeadscaleService) CreatePreAuthKey(user string, reusable bool, ephemera
 	}
 
 	return key, nil
+}
+
+// GetInfrastructureKey returns the existing infrastructure pre-auth key
+func (s *HeadscaleService) GetInfrastructureKey() (string, error) {
+	// List all pre-auth keys for the infrastructure user
+	cmd := exec.Command("headscale", "preauthkeys", "list", "-u", "infrastructure", "-c", "/etc/headscale/config.yaml", "-o", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to list pre-auth keys: %v", err)
+	}
+
+	// Parse JSON to find a reusable key
+	var keys []map[string]interface{}
+	if err := json.Unmarshal(output, &keys); err != nil {
+		return "", fmt.Errorf("failed to parse pre-auth keys: %v", err)
+	}
+
+	// Find the first reusable key
+	for _, key := range keys {
+		if reusable, ok := key["reusable"].(bool); ok && reusable {
+			if keyStr, ok := key["key"].(string); ok && keyStr != "" {
+				return keyStr, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("no reusable infrastructure key found")
 }
 
 // IsEnabled checks if Headscale is available and configured

@@ -75,6 +75,7 @@ func (s *ComputerService) ListComputers() ([]models.Computer, error) {
 
 		// Check Tailscale connectivity
 		if tailscaleNodes != nil {
+			// Try exact match first
 			if node, exists := tailscaleNodes[cleanName]; exists {
 				// Found in Tailscale - get overlay IP and URL
 				if ip := s.extractIPFromNode(node); ip != "" {
@@ -89,6 +90,31 @@ func (s *ComputerService) ListComputers() ([]models.Computer, error) {
 						computer.OverlayURL = fmt.Sprintf("%s.%s.mesh", cleanName, domainStatus.Domain)
 					}
 				}
+			} else {
+				// Try to find a Tailscale node that might be the same machine
+				// Check if this is the domain controller and look for "vexa-server" or similar
+				dcHostname := s.getDomainControllerHostname()
+				if cleanName == strings.TrimSuffix(dcHostname, "$") {
+					// This is the DC, look for common Tailscale names
+					possibleNames := []string{"vexa-server", "vexa", "dc", "domain-controller"}
+					for _, possibleName := range possibleNames {
+						if node, exists := tailscaleNodes[possibleName]; exists {
+							if ip := s.extractIPFromNode(node); ip != "" {
+								computer.OverlayIP = ip
+								computer.Online = true
+								computer.ConnectionType = "overlay"
+
+								// Generate overlay URL
+								domainService := NewDomainService()
+								domainStatus, _ := domainService.GetDomainStatus()
+								if domainStatus != nil && domainStatus.Domain != "" && domainStatus.Domain != "PROVISIONED" {
+									computer.OverlayURL = fmt.Sprintf("%s.%s.mesh", cleanName, domainStatus.Domain)
+								}
+								break
+							}
+						}
+					}
+				}
 			}
 		}
 
@@ -97,9 +123,17 @@ func (s *ComputerService) ListComputers() ([]models.Computer, error) {
 
 	// Add Tailscale-only nodes (not domain-joined)
 	if tailscaleNodes != nil {
+		dcHostname := s.getDomainControllerHostname()
+		dcCleanName := strings.TrimSuffix(dcHostname, "$")
+
 		for nodeName, node := range tailscaleNodes {
 			// Skip if already in domain computers list
 			if domainComputers[nodeName] {
+				continue
+			}
+
+			// Skip if this is the domain controller (already handled above)
+			if nodeName == dcCleanName || nodeName == "vexa-server" || nodeName == "vexa" {
 				continue
 			}
 

@@ -1,6 +1,6 @@
-# Vexa - Directory Services Platform
+# Vexa - Modern Directory Services Platform
 
-A modern, open-source directory services platform built on Samba AD DC with a beautiful web-based management interface.
+A modern, open-source directory services platform built on Samba AD DC with secure mesh networking and a beautiful web-based management interface.
 
 ![Vexa Dashboard](vexa.png)
 *Vexa's modern, responsive web interface with dark mode support*
@@ -8,10 +8,12 @@ A modern, open-source directory services platform built on Samba AD DC with a be
 ## Features
 
 - **Samba-based AD DC**: Full AD-compatible Domain Controller functionality
+- **Secure Mesh Networking**: Built-in Headscale/Tailscale integration for secure remote access
 - **Modern Web Interface**: Beautiful, responsive React-based admin interface
 - **PAM Authentication**: Authenticate with Linux PAM or directory credentials
 - **User & Group Management**: Easy-to-use interface for managing AD-compatible users and groups
-- **DNS Management**: Integrated DNS management (BIND9 or Samba Internal)
+- **Computer Management**: Deploy and manage domain-joined computers with offline scripts
+- **DNS Management**: Integrated DNS management with split DNS for mesh networking
 - **Mobile Responsive**: Works on desktop, tablet, and mobile devices
 - **Light & Dark Mode**: Comfortable interface for any environment
 - **LXC Compatible**: Can run in full Linux or LXC containers
@@ -21,142 +23,115 @@ A modern, open-source directory services platform built on Samba AD DC with a be
 - **Backend API**: Go-based REST API with PAM authentication
 - **Frontend**: React + Vite + Tailwind CSS + TypeScript
 - **Domain Controller**: Samba AD DC
-- **DNS**: Samba Internal DNS or BIND9
+- **Mesh Networking**: Headscale (self-hosted Tailscale control plane)
+- **DNS**: Samba Internal DNS with split DNS for mesh domains
 - **Authentication**: Kerberos + LDAP
 
 ## Prerequisites
 
-- Linux system (Ubuntu, Debian, RHEL, CentOS, Rocky Linux, or Arch)
+- Ubuntu 24.04 LTS
 - Root or sudo access
-- Go (already installed)
-- Dart (already installed)
-- Node.js will be installed by bootstrap script
+- Internet connection for initial setup
 
 ## Quick Start
 
-### 1. Install Dependencies
-
-Run the bootstrap script to install all required dependencies:
+### One-Command Installation
 
 ```bash
-sudo ./bootstrap.sh
+curl -fsSL https://raw.githubusercontent.com/griffinwebnet/bootstrap.sh | sudo bash
 ```
 
-This will install:
-- Samba AD DC
-- Kerberos
-- BIND9 (or configure Samba Internal DNS)
-- Node.js (for frontend)
-- All required system packages
+This will install all dependencies and start the services automatically.
 
-### 2. Start the API Backend
+### Set Up Your Domain
 
-```bash
-cd api
-cp .env.example .env
-# Edit .env and set a secure JWT_SECRET
-go mod download
-go run .
-```
+1. **Go to the URL**: `http://localhost:8080` (or your server's IP address)
+2. **Login** with your Linux user credentials (must be a sudoer)
+3. **Navigate to "Domain Setup"** in the sidebar
+4. **Configure your domain**:
+   - Domain name (e.g., `company.local`)
+   - Domain controller hostname
+   - Administrator password
+5. **Click "Provision Domain"** and wait for completion
 
-The API will start on `http://localhost:8080`
+### Optional: Enable Overlay Networking
 
-### 3. Start the Frontend
+1. **Go to "Overlay Networking"** in the sidebar
+2. **Enter your FQDN** (e.g., `vexa.company.com`)
+3. **Click "Set Up Overlay Networking"** to enable secure mesh VPN
 
-In a new terminal:
+### Deploy Computers
 
-```bash
-cd web
-npm install
-npm run dev
-```
-
-The web interface will start on `http://localhost:5173`
-
-### 4. Login
-
-Open your browser to `http://localhost:5173` and login with your Linux user credentials (must be a sudoer or in the wheel group).
-
-### 5. Provision Your Domain
-
-Navigate to "Domain Setup" in the sidebar and configure your new Active Directory domain.
+1. **Go to "Computers"** in the sidebar
+2. **Click "Add Computer"**
+3. **Choose deployment option**:
+   - **Domain Join with Tailscale**: Full domain join + secure mesh access
+   - **Domain Join Only**: Local domain join only
+   - **Add to Tailnet**: Add existing domain computer to mesh
+4. **Download the script** and run it on the target computer
 
 ## Project Structure
 
 ```
 Vexa/
-├── bootstrap.sh          # Dependency installation script
-├── api/                  # Go backend API
+├── bootstrap.sh              # One-click setup script
+├── api/                      # Go backend API
 │   ├── main.go
-│   ├── handlers/         # API route handlers
-│   ├── middleware/       # Auth & CORS middleware
-│   └── utils/            # Utility functions
-├── web/                  # React frontend
+│   ├── handlers/             # API route handlers
+│   ├── services/             # Business logic services
+│   ├── middleware/           # Auth & CORS middleware
+│   └── scripts/              # Deployment scripts
+├── web/                      # React frontend
 │   ├── src/
-│   │   ├── components/   # Reusable UI components
-│   │   ├── pages/        # Page components
-│   │   ├── layouts/      # Layout components
-│   │   ├── stores/       # Zustand state management
-│   │   └── lib/          # API client & utilities
+│   │   ├── components/       # Reusable UI components
+│   │   ├── pages/            # Page components
+│   │   ├── layouts/          # Layout components
+│   │   ├── stores/           # Zustand state management
+│   │   └── lib/              # API client & utilities
 │   └── package.json
 └── README.md
 ```
 
-## API Endpoints
-
-### Authentication
-- `POST /api/v1/auth/login` - Login with PAM credentials
+## Key Features
 
 ### Domain Management
-- `POST /api/v1/domain/provision` - Provision new domain
-- `GET /api/v1/domain/status` - Get domain status
-- `PUT /api/v1/domain/configure` - Update domain configuration
+- **One-click domain provisioning** with Samba AD DC
+- **Automatic DNS configuration** with split DNS for mesh networking
+- **Kerberos and LDAP integration** for full AD compatibility
 
-### User Management
-- `GET /api/v1/users` - List all users
-- `POST /api/v1/users` - Create new user
-- `GET /api/v1/users/:id` - Get user details
-- `PUT /api/v1/users/:id` - Update user
-- `DELETE /api/v1/users/:id` - Delete user
+### Secure Mesh Networking
+- **Headscale integration** for self-hosted Tailscale control plane
+- **Split DNS configuration** for seamless domain resolution
+- **Offline deployment scripts** for remote computer setup
+- **Automatic key management** with reusable infrastructure keys
 
-### Group Management
-- `GET /api/v1/groups` - List all groups
-- `POST /api/v1/groups` - Create new group
-- `GET /api/v1/groups/:id` - Get group details
-- `PUT /api/v1/groups/:id` - Update group
-- `DELETE /api/v1/groups/:id` - Delete group
+### Computer Deployment
+- **Offline PowerShell scripts** for Windows deployment
+- **Automatic Tailscale installation** and configuration
+- **Domain join automation** with unattended setup
+- **Remote access via mesh network** after deployment
 
-### DNS Management
-- `GET /api/v1/dns/zones` - List DNS zones
-- `GET /api/v1/dns/records` - List DNS records
-- `POST /api/v1/dns/records` - Create DNS record
-- `DELETE /api/v1/dns/records/:id` - Delete DNS record
+### User & Group Management
+- **Web-based user management** with AD compatibility
+- **Group membership management** with nested groups support
+- **Password policy enforcement** and account management
 
 ## Firewall Configuration
 
 Make sure these ports are open:
 
-- **DNS**: 53/tcp, 53/udp
-- **Kerberos**: 88/tcp, 88/udp
-- **LDAP**: 389/tcp, 389/udp
-- **SMB**: 445/tcp
-- **Kerberos Password**: 464/tcp, 464/udp
-- **LDAPS**: 636/tcp
-- **Global Catalog**: 3268/tcp, 3269/tcp
-- **API**: 8080/tcp (for development)
-- **Web**: 5173/tcp (for development)
+- **Web Interface**: 8080/tcp
+- **Headscale API**: 50443/tcp (for mesh networking)
 
 ## Development
 
 ### Backend
-
 ```bash
 cd api
 go run .
 ```
 
 ### Frontend
-
 ```bash
 cd web
 npm run dev
@@ -177,14 +152,40 @@ npm run build
 # Output will be in web/dist/
 ```
 
-## Security Notes
+## Deployment Scenarios
 
-- Change the default JWT_SECRET in production
-- Use strong passwords for domain administrator account
-- Run behind a reverse proxy (nginx/Apache) in production
-- Enable HTTPS in production
-- Restrict API access with firewall rules
-- Keep system packages updated
+### Local Network Only
+- Deploy computers using "Domain Join Only" option
+- All computers must be on the same local network
+- No external access to domain resources
+
+### Remote Access with Mesh Networking
+- Enable "Overlay Networking" during setup
+- Deploy computers using "Domain Join with Tailscale"
+- Access domain resources from anywhere via secure mesh VPN
+- Automatic DNS resolution for both local and mesh domains
+
+### Hybrid Deployment
+- Mix of local and remote computers
+- Some computers domain-joined only, others with mesh access
+- Flexible deployment based on security requirements
+
+## Troubleshooting
+
+### Domain Provisioning Issues
+- Check system logs: `journalctl -u samba-ad-dc`
+- Verify DNS resolution: `nslookup yourdomain.local`
+- Test Kerberos: `kinit administrator@YOURDOMAIN.LOCAL`
+
+### Mesh Networking Issues
+- Check Headscale status: `systemctl status headscale`
+- Verify Tailscale connection: `tailscale status`
+- Test mesh DNS: `nslookup computer.domain.mesh`
+
+### Computer Deployment Issues
+- Ensure target computer has internet access for Tailscale download
+- Run PowerShell as Administrator
+- Check Windows Event Logs for domain join errors
 
 ## Contributing
 
@@ -197,4 +198,3 @@ This is an open-source project. Contributions are welcome!
 ## Support
 
 For issues and questions, please open an issue on GitHub.
-

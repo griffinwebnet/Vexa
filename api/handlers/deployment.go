@@ -100,17 +100,17 @@ func (h *DeploymentHandler) GenerateDeploymentCommand(c *gin.Context) {
 	var scriptName string
 	var authKey string
 
-	// Generate pre-auth key for Tailscale options
+	// Get existing infrastructure pre-auth key for Tailscale options
 	if req.ScriptType == "tailscale-domain" || req.ScriptType == "tailnet-add" {
-		// Create a pre-auth key for the deployment
-		preAuthKey, err := h.headscaleService.CreatePreAuthKey("admin", true, false) // Reusable, not ephemeral
+		// Use the existing infrastructure key instead of creating a new one
+		existingKey, err := h.headscaleService.GetInfrastructureKey()
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": fmt.Sprintf("Failed to create pre-auth key: %v", err),
+				"error": fmt.Sprintf("Failed to get infrastructure key: %v", err),
 			})
 			return
 		}
-		authKey = preAuthKey.Key
+		authKey = existingKey
 	}
 
 	switch req.ScriptType {
