@@ -1,12 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { 
   Shield, 
   Eye, 
   Settings, 
-  Search, 
   Filter, 
-  Download, 
   RefreshCw,
   AlertTriangle,
   CheckCircle,
@@ -82,7 +80,7 @@ export default function Security() {
   })
 
   // Fetch log statistics
-  const { data: logStats, isLoading: statsLoading } = useQuery({
+  const { data: logStats } = useQuery({
     queryKey: ['log-stats'],
     queryFn: async () => {
       const response = await api.get('/audit/stats')
