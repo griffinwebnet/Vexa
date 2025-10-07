@@ -170,15 +170,17 @@ func NewCommandSanitizer() *CommandSanitizer {
 					0: isSafeSMBPath,
 					2: isSafeCredential,
 				},
-				MaxArgs: 4,
+				MaxArgs: 6,
 			},
 			"pamtester": {
 				Allowed:    true,
 				StaticArgs: []string{"login", "authenticate"},
 				PositionalArgs: map[int]ArgValidator{
-					0: isSafeUsername,
+					0: isSafeServiceName,
+					1: isSafeUsername,
+					2: isSafeCommandName,
 				},
-				MaxArgs: 2,
+				MaxArgs: 4,
 			},
 			"wbinfo": {
 				Allowed:    true,

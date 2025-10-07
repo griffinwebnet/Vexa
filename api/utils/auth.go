@@ -181,7 +181,7 @@ func VerifyCurrentPassword(username, password string) bool {
 	}
 
 	// Try with domain prefix first
-	Debug("(Trying password verification with domain prefix %s\\%s\n", domainName, username)
+	Debug("Trying password verification with domain prefix %s\\%s\n", domainName, username)
 	cmd, err := SafeCommandContext(ctx, "smbclient", "//localhost/ipc$", "-U", domainName+"\\"+username+"%"+password, "-c", "exit")
 	if err != nil {
 		Debug("Command sanitization failed for smbclient domain: %v\n", err)
