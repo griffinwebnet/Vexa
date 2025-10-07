@@ -157,7 +157,7 @@ func NewCommandSanitizer() *CommandSanitizer {
 			// Samba commands
 			"samba-tool": {
 				Allowed:    true,
-				StaticArgs: []string{"domain", "info", "user", "create", "list", "group", "dns", "add", "settings", "set", "127.0.0.1"},
+				StaticArgs: []string{"domain", "info", "user", "create", "list", "group", "dns", "add", "settings", "set", "127.0.0.1", "ou", "delete"},
 				PositionalArgs: map[int]ArgValidator{
 					1: isSafeSambaArg,
 				},
@@ -214,6 +214,10 @@ func NewCommandSanitizer() *CommandSanitizer {
 					0: isSafeUsername,
 				},
 				MaxArgs: 1,
+			},
+			"kdestroy": {
+				Allowed: true,
+				MaxArgs: 0,
 			},
 
 			// Headscale/Tailscale commands

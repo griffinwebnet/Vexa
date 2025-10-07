@@ -4,8 +4,10 @@ import (
 	"net/http"
 	"os/exec"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/griffinwebnet/vexa/api/utils"
 )
 
 type PasswordPolicy struct {
@@ -105,10 +107,20 @@ func UpdateDomainPolicies(c *gin.Context) {
 
 // GetOUList returns list of organizational units
 func GetOUList(c *gin.Context) {
-	cmd := exec.Command("samba-tool", "ou", "list")
-	output, err := cmd.CombinedOutput()
+	utils.Info("Fetching organizational units list")
 
+	cmd, err := utils.SafeCommand("samba-tool", "ou", "list")
 	if err != nil {
+		utils.Error("Command sanitization failed for samba-tool ou list: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Command sanitization failed",
+		})
+		return
+	}
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		utils.Error("Failed to list OUs: %v, output: %s", err, string(output))
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to list OUs",
 			"details": string(output),
@@ -116,10 +128,11 @@ func GetOUList(c *gin.Context) {
 		return
 	}
 
-	// TODO: Parse OU list and build hierarchy
-	c.JSON(http.StatusOK, gin.H{
-		"ous": string(output),
-	})
+	// Parse OU list and build hierarchy
+	ouStructure := parseOUList(string(output))
+	utils.Info("Successfully fetched %d OUs", len(ouStructure.Children))
+
+	c.JSON(http.StatusOK, ouStructure)
 }
 
 // CreateOU creates a new organizational unit
@@ -181,4 +194,78 @@ func DeleteOU(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "OU deleted successfully",
 	})
+}
+
+// OUStructure represents the hierarchical structure of organizational units
+type OUStructure struct {
+	Name        string        `json:"name"`
+	Path        string        `json:"path"`
+	Description string        `json:"description,omitempty"`
+	Children    []OUStructure `json:"children"`
+}
+
+// parseOUList parses the samba-tool ou list output and builds a hierarchical structure
+func parseOUList(output string) OUStructure {
+	// Default root structure
+	root := OUStructure{
+		Name:     "Domain",
+		Path:     "root",
+		Children: []OUStructure{},
+	}
+
+	// Parse the output line by line
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		// Parse OU line format: "OU=Name,DC=domain,DC=com"
+		if strings.HasPrefix(line, "OU=") {
+			ou := parseOULine(line)
+			if ou.Name != "" {
+				root.Children = append(root.Children, ou)
+			}
+		}
+	}
+
+	// If no OUs found, add default Domain Controllers OU
+	if len(root.Children) == 0 {
+		root.Children = append(root.Children, OUStructure{
+			Name:        "Domain Controllers",
+			Path:        "OU=Domain Controllers",
+			Description: "Default controllers container",
+			Children:    []OUStructure{},
+		})
+	}
+
+	return root
+}
+
+// parseOULine parses a single OU line and extracts the name and path
+func parseOULine(line string) OUStructure {
+	// Extract OU name from "OU=Name,DC=domain,DC=com"
+	parts := strings.Split(line, ",")
+	if len(parts) == 0 {
+		return OUStructure{}
+	}
+
+	ouPart := parts[0] // "OU=Name"
+	if !strings.HasPrefix(ouPart, "OU=") {
+		return OUStructure{}
+	}
+
+	name := strings.TrimPrefix(ouPart, "OU=")
+	if name == "" {
+		return OUStructure{}
+	}
+
+	return OUStructure{
+		Name:        name,
+		Path:        line, // Full DN path
+		Description: "Organizational Unit",
+		Children:    []OUStructure{},
+	}
 }

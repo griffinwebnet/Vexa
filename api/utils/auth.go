@@ -2,7 +2,6 @@ package utils
 
 import (
 	"context"
-	"os/exec"
 	"strings"
 	"time"
 )
@@ -232,7 +231,10 @@ func tryKerberosAuth(username, password, domainName string) bool {
 	err2 := cmd.Run()
 	if err2 == nil {
 		// Clean up the ticket
-		exec.Command("kdestroy").Run()
+		cmd, err := SafeCommand("kdestroy")
+		if err == nil {
+			cmd.Run()
+		}
 		return true
 	}
 
