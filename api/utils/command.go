@@ -149,7 +149,7 @@ func NewCommandSanitizer() *CommandSanitizer {
 			// Samba commands
 			"samba-tool": {
 				Allowed:    true,
-				StaticArgs: []string{"domain", "info", "user", "create", "list", "group", "dns", "add", "settings", "set"},
+				StaticArgs: []string{"domain", "info", "user", "create", "list", "group", "dns", "add", "settings", "set", "127.0.0.1"},
 				PositionalArgs: map[int]ArgValidator{
 					1: isSafeSambaArg,
 				},
@@ -387,7 +387,7 @@ func isSafeServiceName(service string) bool {
 	// Allow common services
 	allowedServices := []string{
 		"headscale", "tailscaled", "samba-ad-dc", "systemd-resolved",
-		"vexa-api", "nginx", "apache2", "mysql", "postgresql",
+		"vexa-api", "nginx", "apache2", "mysql", "postgresql", "login",
 	}
 
 	for _, allowed := range allowedServices {
