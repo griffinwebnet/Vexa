@@ -38,7 +38,7 @@ A modern, open-source directory services platform built on Samba AD DC with secu
 ### One-Command Installation
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/griffinwebnet/bootstrap.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/griffinwebnet/vexa/bootstrap.sh | sudo bash
 ```
 
 This will install all dependencies and start the services automatically.
