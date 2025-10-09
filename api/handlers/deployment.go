@@ -115,44 +115,16 @@ func (h *DeploymentHandler) GenerateDeploymentCommand(c *gin.Context) {
 
 	switch req.ScriptType {
 	case "tailscale-domain":
-		scriptName = "domain-join-with-tailscale.ps1"
-		command = fmt.Sprintf(`powershell -ExecutionPolicy Bypass -File ".\%s"`, scriptName)
-
-		// Add parameters
-		if req.DomainName != "" {
-			command += fmt.Sprintf(` -DomainName "%s"`, req.DomainName)
-		}
-		if req.DomainController != "" {
-			command += fmt.Sprintf(` -DomainController "%s"`, req.DomainController)
-		}
-		if authKey != "" {
-			command += fmt.Sprintf(` -TailscaleAuthKey "%s"`, authKey)
-		}
-		if req.ComputerName != "" {
-			command += fmt.Sprintf(` -ComputerName "%s"`, req.ComputerName)
-		}
+		scriptName = "domain-join-with-tailscale.bat"
+		command = scriptName
 
 	case "domain-only":
-		scriptName = "domain-join-only.ps1"
-		command = fmt.Sprintf(`powershell -ExecutionPolicy Bypass -File ".\%s"`, scriptName)
-
-		if req.DomainName != "" {
-			command += fmt.Sprintf(` -DomainName "%s"`, req.DomainName)
-		}
-		if req.ComputerName != "" {
-			command += fmt.Sprintf(` -ComputerName "%s"`, req.ComputerName)
-		}
+		scriptName = "domain-join-only.bat"
+		command = scriptName
 
 	case "tailnet-add":
-		scriptName = "tailnet-add.ps1"
-		command = fmt.Sprintf(`powershell -ExecutionPolicy Bypass -File ".\%s"`, scriptName)
-
-		if authKey != "" {
-			command += fmt.Sprintf(` -TailscaleAuthKey "%s"`, authKey)
-		}
-		if req.ComputerName != "" {
-			command += fmt.Sprintf(` -ComputerName "%s"`, req.ComputerName)
-		}
+		scriptName = "tailnet-add.bat"
+		command = scriptName
 
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -165,9 +137,9 @@ func (h *DeploymentHandler) GenerateDeploymentCommand(c *gin.Context) {
 		"command":    command,
 		"script_url": fmt.Sprintf("%s/api/deployment/scripts/%s", getBaseURL(c), scriptName),
 		"instructions": []string{
-			"1. Copy the command above",
-			"2. Open PowerShell as Administrator",
-			"3. Paste and run the command",
+			"1. Download the script using the 'Download Script' button",
+			"2. Right-click the downloaded .bat file",
+			"3. Select 'Run as Administrator'",
 			"4. Follow the on-screen prompts",
 		},
 	}
@@ -187,6 +159,9 @@ func (h *DeploymentHandler) ServeDeploymentScript(c *gin.Context) {
 
 	// Validate script name for security
 	allowedScripts := []string{
+		"domain-join-with-tailscale.bat",
+		"domain-join-only.bat",
+		"tailnet-add.bat",
 		"domain-join-with-tailscale.ps1",
 		"domain-join-only.ps1",
 		"tailnet-add.ps1",
@@ -218,17 +193,50 @@ func (h *DeploymentHandler) ServeDeploymentScript(c *gin.Context) {
 	}
 
 	// Replace template variables with actual values
+	// Get domain info
+	domainService := services.NewDomainService()
+	domainStatus, err := domainService.GetDomainStatus()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to get domain status",
+		})
+		return
+	}
+
 	// Resolve login server URL (full) used by tailscale up
 	loginServer := h.headscaleService.GetLoginServerFull()
 	if loginServer == "" {
 		// fall back to API base + /mesh when none configured
 		loginServer = getBaseURL(c) + "/mesh"
 	}
-	processed := strings.ReplaceAll(string(scriptContent), "{{LOGIN_SERVER}}", loginServer)
-	processedContent := processed
+
+	// Get auth key if this is a Tailscale script
+	if strings.Contains(scriptName, "tailscale") || strings.Contains(scriptName, "tailnet") {
+		if authKey == "" {
+			// Try to get infrastructure key
+			existingKey, keyErr := h.headscaleService.GetInfrastructureKey()
+			if keyErr == nil {
+				authKey = existingKey
+			}
+		}
+	}
+
+	// Replace all template variables
+	processedContent := string(scriptContent)
+	processedContent = strings.ReplaceAll(processedContent, "{{LOGIN_SERVER}}", loginServer)
+	processedContent = strings.ReplaceAll(processedContent, "{{AUTH_KEY}}", authKey)
+	processedContent = strings.ReplaceAll(processedContent, "{{DOMAIN_NAME}}", domainStatus.Domain)
+	processedContent = strings.ReplaceAll(processedContent, "{{DOMAIN_REALM}}", domainStatus.Realm)
+	processedContent = strings.ReplaceAll(processedContent, "{{ADMIN_USER}}", "administrator@"+domainStatus.Realm)
+	// Note: Admin password would need to be stored/retrieved securely - for now use placeholder
+	processedContent = strings.ReplaceAll(processedContent, "{{ADMIN_PASSWORD}}", "CHANGE_ME_IN_SCRIPT")
 
 	// Set appropriate headers
-	c.Header("Content-Type", "text/plain")
+	contentType := "text/plain"
+	if strings.HasSuffix(scriptName, ".bat") {
+		contentType = "application/x-bat"
+	}
+	c.Header("Content-Type", contentType)
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", scriptName))
 	c.String(http.StatusOK, processedContent)
 }

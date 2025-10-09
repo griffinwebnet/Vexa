@@ -199,16 +199,19 @@ func NewCommandSanitizer() *CommandSanitizer {
 				Allowed:    true,
 				StaticArgs: []string{"-s", "--parameter-name"},
 				PositionalArgs: map[int]ArgValidator{
-					1: isSafeSambaArg,
+					2: isSafeSambaArg,
 				},
-				MaxArgs: 2,
+				MaxArgs: 3,
 			},
 			"smbclient": {
 				Allowed:    true,
-				StaticArgs: []string{"//localhost/ipc$", "//localhost/netlogon", "-U", "-c", "exit"},
+				StaticArgs: []string{"//localhost/ipc$", "//localhost/netlogon", "-L", "localhost", "-U", "-c", "exit"},
 				PositionalArgs: map[int]ArgValidator{
-					0: isSafeSMBPath,
-					2: isSafeCredential,
+					0: func(arg string) bool {
+						// Position 0 can be SMB path or -L flag
+						return arg == "-L" || isSafeSMBPath(arg)
+					},
+					3: isSafeCredential,
 				},
 				MaxArgs: 6,
 			},
