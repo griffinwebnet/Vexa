@@ -7,29 +7,28 @@ A modern, open-source directory services platform built on Samba AD DC with secu
 
 ## Features
 
-- **Samba-based AD DC**: Full AD-compatible Domain Controller functionality
+- **Samba-based AD-Compatible DC**: Full AD-compatible Domain Controller functionality
 - **Secure Mesh Networking**: Built-in Headscale/Tailscale integration for secure remote access
 - **Modern Web Interface**: Beautiful, responsive React-based admin interface
 - **PAM Authentication**: Authenticate with Linux PAM or directory credentials
-- **User & Group Management**: Easy-to-use interface for managing AD-compatible users and groups
+- **User & Group Management**: Easy-to-use interface for managing AD-compatible users groups and OUs
+- **Policy Management**: Manage Basic Policies ofr password enforcement ans security (Limited Group policy support planned for later releases)
 - **Computer Management**: Deploy and manage domain-joined computers with offline scripts
 - **DNS Management**: Integrated DNS management with split DNS for mesh networking
-- **Mobile Responsive**: Works on desktop, tablet, and mobile devices
 - **Light & Dark Mode**: Comfortable interface for any environment
-- **LXC Compatible**: Can run in full Linux or LXC containers
 
 ## Architecture
 
 - **Backend API**: Go-based REST API with PAM authentication
 - **Frontend**: React + Vite + Tailwind CSS + TypeScript
-- **Domain Controller**: Samba AD DC
+- **Domain Controller**: Samba AD-Compatible DC
 - **Mesh Networking**: Headscale (self-hosted Tailscale control plane)
 - **DNS**: Samba Internal DNS with split DNS for mesh domains
 - **Authentication**: Kerberos + LDAP
 
 ## Prerequisites
 
-- Ubuntu 24.04 LTS
+- Ubuntu 24.04 LTS (adding support for Debian and OpenSUSE MicroOS later)
 - Root or sudo access
 - Internet connection for initial setup
 
@@ -45,19 +44,18 @@ This will install all dependencies and start the services automatically.
 
 ### Set Up Your Domain
 
-1. **Go to the URL**: `http://localhost:8080` (or your server's IP address)
-2. **Login** with your Linux user credentials (must be a sudoer)
-3. **Navigate to "Domain Setup"** in the sidebar
+1. **Go to the URL**: `http://ip.of.ser.ver/` or `http://vexa/` to start the setup.
+2. **Login** with your Linux System user credentials (must be a sudoer or root)
+3. ** Wizard will walk though Domain Setup (its seriously One [1] Step).
 4. **Configure your domain**:
-   - Domain name (e.g., `company.local`)
-   - Domain controller hostname
-   - Administrator password
+   - Domain Realm (e.g., `company.local`, `example.internal`, `yourdomain.tld`, etc.)
+   - Domain controller hostname is determined by the hostname you set your linux system up with
 5. **Click "Provision Domain"** and wait for completion
 
 ### Optional: Enable Overlay Networking
 
 1. **Go to "Overlay Networking"** in the sidebar
-2. **Enter your FQDN** (e.g., `vexa.company.com`)
+2. **Enter your FQDN** (e.g., `vexa.company.com`. This housld NOT be the same as your DOMAIN and needs to be piblically assessible. DDNS support planned in a later release)
 3. **Click "Set Up Overlay Networking"** to enable secure mesh VPN
 
 ### Deploy Computers
@@ -95,7 +93,7 @@ Vexa/
 ## Key Features
 
 ### Domain Management
-- **One-click domain provisioning** with Samba AD DC
+- **One-click domain provisioning** with Samba AD-DC
 - **Automatic DNS configuration** with split DNS for mesh networking
 - **Kerberos and LDAP integration** for full AD compatibility
 
@@ -120,37 +118,7 @@ Vexa/
 
 Make sure these ports are open:
 
-- **Web Interface**: 8080/tcp
 - **Headscale API**: 50443/tcp (for mesh networking)
-
-## Development
-
-### Backend
-```bash
-cd api
-go run .
-```
-
-### Frontend
-```bash
-cd web
-npm run dev
-```
-
-### Build for Production
-
-**Backend:**
-```bash
-cd api
-go build -o vexa-api
-```
-
-**Frontend:**
-```bash
-cd web
-npm run build
-# Output will be in web/dist/
-```
 
 ## Deployment Scenarios
 
@@ -169,6 +137,9 @@ npm run build
 - Mix of local and remote computers
 - Some computers domain-joined only, others with mesh access
 - Flexible deployment based on security requirements
+
+### Traditional VPN
+- If you are already usign or plan to use traditional IPSec/Wireguard/OpenVPN this shoudl work without issues. just ensure your VPN
 
 ## Troubleshooting
 
