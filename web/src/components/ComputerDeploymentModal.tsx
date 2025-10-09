@@ -332,7 +332,7 @@ export default function ComputerDeploymentModal({
               <Card>
                 <div className="p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-sm font-medium">Download the PowerShell script:</p>
+                    <p className="text-sm font-medium">Download the deployment script:</p>
                     <div className="flex gap-2">
                       <Button
                         variant="outline"
@@ -374,11 +374,10 @@ export default function ComputerDeploymentModal({
                   Instructions
                 </h4>
                 <ol className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
-                  <li>1. Download the PowerShell script to a USB drive</li>
+                  <li>1. Download the batch script to a USB drive</li>
                   <li>2. Copy the script to the target computer</li>
-                  <li>3. Open PowerShell as Administrator on the target computer</li>
-                  <li>4. Run the command above to execute the script</li>
-                  <li>5. Follow the on-screen prompts</li>
+                  <li>3. Right-click the .bat file and select "Run as Administrator"</li>
+                  <li>4. Follow the on-screen prompts</li>
                 </ol>
               </div>
             </div>
