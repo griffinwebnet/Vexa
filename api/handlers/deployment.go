@@ -211,13 +211,12 @@ func (h *DeploymentHandler) ServeDeploymentScript(c *gin.Context) {
 	}
 
 	// Get auth key if this is a Tailscale script
+	authKey := ""
 	if strings.Contains(scriptName, "tailscale") || strings.Contains(scriptName, "tailnet") {
-		if authKey == "" {
-			// Try to get infrastructure key
-			existingKey, keyErr := h.headscaleService.GetInfrastructureKey()
-			if keyErr == nil {
-				authKey = existingKey
-			}
+		// Try to get infrastructure key
+		existingKey, keyErr := h.headscaleService.GetInfrastructureKey()
+		if keyErr == nil {
+			authKey = existingKey
 		}
 	}
 
