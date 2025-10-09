@@ -10,13 +10,13 @@ setlocal enabledelayedexpansion
 set LOGIN_SERVER={{LOGIN_SERVER}}
 set AUTH_KEY={{AUTH_KEY}}
 
-:: Check for admin privileges
+:: Check for admin privileges and elevate if needed
 net session >nul 2>&1
 if %errorLevel% neq 0 (
-    echo ERROR: This script requires Administrator privileges.
-    echo Please run Command Prompt as Administrator.
-    pause
-    exit /b 1
+    echo This script requires Administrator privileges.
+    echo Elevating with UAC prompt...
+    powershell -Command "Start-Process '%~f0' -Verb RunAs"
+    exit /b 0
 )
 
 echo ========================================

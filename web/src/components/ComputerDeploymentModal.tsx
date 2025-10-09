@@ -170,10 +170,10 @@ export default function ComputerDeploymentModal({
 
   const getScriptFileName = () => {
     switch (selectedScript) {
-      case 'tailscale-domain': return 'domain-join-with-tailscale.ps1'
-      case 'domain-only': return 'domain-join-only.ps1'
-      case 'tailnet-add': return 'tailnet-add.ps1'
-      default: return 'deployment-script.ps1'
+      case 'tailscale-domain': return 'domain-join-with-tailscale.bat'
+      case 'domain-only': return 'domain-join-only.bat'
+      case 'tailnet-add': return 'tailnet-add.bat'
+      default: return 'deployment-script.bat'
     }
   }
 
@@ -376,7 +376,7 @@ export default function ComputerDeploymentModal({
                 <ol className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
                   <li>1. Download the batch script to a USB drive</li>
                   <li>2. Copy the script to the target computer</li>
-                  <li>3. Right-click the .bat file and select "Run as Administrator"</li>
+                  <li>3. Double-click the .bat file (UAC will prompt for elevation)</li>
                   <li>4. Follow the on-screen prompts</li>
                 </ol>
               </div>

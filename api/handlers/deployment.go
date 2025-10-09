@@ -162,9 +162,6 @@ func (h *DeploymentHandler) ServeDeploymentScript(c *gin.Context) {
 		"domain-join-with-tailscale.bat",
 		"domain-join-only.bat",
 		"tailnet-add.bat",
-		"domain-join-with-tailscale.ps1",
-		"domain-join-only.ps1",
-		"tailnet-add.ps1",
 	}
 
 	isAllowed := false
@@ -226,9 +223,9 @@ func (h *DeploymentHandler) ServeDeploymentScript(c *gin.Context) {
 	processedContent = strings.ReplaceAll(processedContent, "{{AUTH_KEY}}", authKey)
 	processedContent = strings.ReplaceAll(processedContent, "{{DOMAIN_NAME}}", domainStatus.Domain)
 	processedContent = strings.ReplaceAll(processedContent, "{{DOMAIN_REALM}}", domainStatus.Realm)
+	// DO NOT inject admin credentials - scripts should prompt for them
 	processedContent = strings.ReplaceAll(processedContent, "{{ADMIN_USER}}", "administrator@"+domainStatus.Realm)
-	// Note: Admin password would need to be stored/retrieved securely - for now use placeholder
-	processedContent = strings.ReplaceAll(processedContent, "{{ADMIN_PASSWORD}}", "CHANGE_ME_IN_SCRIPT")
+	processedContent = strings.ReplaceAll(processedContent, "{{ADMIN_PASSWORD}}", "PROMPT_FOR_PASSWORD")
 
 	// Set appropriate headers
 	contentType := "text/plain"

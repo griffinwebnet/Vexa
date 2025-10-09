@@ -15,16 +15,14 @@ set DOMAIN_NAME={{DOMAIN_NAME}}
 set DOMAIN_REALM={{DOMAIN_REALM}}
 set LOGIN_SERVER={{LOGIN_SERVER}}
 set AUTH_KEY={{AUTH_KEY}}
-set ADMIN_USER={{ADMIN_USER}}
-set ADMIN_PASSWORD={{ADMIN_PASSWORD}}
 
-:: Check for admin privileges
+:: Check for admin privileges and elevate if needed
 net session >nul 2>&1
 if %errorLevel% neq 0 (
-    echo ERROR: This script requires Administrator privileges.
-    echo Please run Command Prompt as Administrator.
-    pause
-    exit /b 1
+    echo This script requires Administrator privileges.
+    echo Elevating with UAC prompt...
+    powershell -Command "Start-Process '%~f0' -Verb RunAs"
+    exit /b 0
 )
 
 echo ========================================
@@ -123,7 +121,11 @@ echo ========================================
 echo.
 
 echo Joining domain %DOMAIN_REALM%...
-powershell -Command "$cred = New-Object System.Management.Automation.PSCredential('%ADMIN_USER%', (ConvertTo-SecureString '%ADMIN_PASSWORD%' -AsPlainText -Force)); Add-Computer -DomainName '%DOMAIN_REALM%' -Credential $cred -Force"
+echo You will be prompted for domain administrator credentials.
+set /p adminUser="Enter domain admin username (e.g., administrator): "
+set /p adminPassword="Enter domain admin password: "
+
+powershell -Command "$cred = New-Object System.Management.Automation.PSCredential('%adminUser%', (ConvertTo-SecureString '%adminPassword%' -AsPlainText -Force)); Add-Computer -DomainName '%DOMAIN_REALM%' -Credential $cred -Force"
 if %errorLevel% neq 0 (
     echo ERROR: Failed to join domain.
     echo Please check credentials and network connectivity.
