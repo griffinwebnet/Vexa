@@ -195,18 +195,17 @@ func NewCommandSanitizer() *CommandSanitizer {
 					"computer", "provision", "--use-rfc2307", "--version",
 				},
 				PositionalArgs: map[int]ArgValidator{
-					0: func(arg string) bool {
-						// Allow domain provision arguments with = signs
-						if strings.HasPrefix(arg, "--realm=") ||
-							strings.HasPrefix(arg, "--domain=") ||
-							strings.HasPrefix(arg, "--adminpass=") ||
-							strings.HasPrefix(arg, "--server-role=") ||
-							strings.HasPrefix(arg, "--dns-backend=") ||
-							strings.HasPrefix(arg, "--option=") {
-							return true
-						}
-						return isSafeSambaArg(arg)
-					},
+					// Apply flexible validator to all argument positions
+					0: isSafeFlexibleSambaArg,
+					1: isSafeFlexibleSambaArg,
+					2: isSafeFlexibleSambaArg,
+					3: isSafeFlexibleSambaArg,
+					4: isSafeFlexibleSambaArg,
+					5: isSafeFlexibleSambaArg,
+					6: isSafeFlexibleSambaArg,
+					7: isSafeFlexibleSambaArg,
+					8: isSafeFlexibleSambaArg,
+					9: isSafeFlexibleSambaArg,
 				},
 				MaxArgs: 15,
 			},
@@ -595,6 +594,26 @@ func isSafeSambaArg(arg string) bool {
 	}
 
 	return false
+}
+
+// isSafeFlexibleSambaArg validates Samba arguments including provision flags
+func isSafeFlexibleSambaArg(arg string) bool {
+	// Allow version flag
+	if arg == "--version" {
+		return true
+	}
+
+	// Allow domain provision arguments with = signs
+	if strings.HasPrefix(arg, "--realm=") ||
+		strings.HasPrefix(arg, "--domain=") ||
+		strings.HasPrefix(arg, "--adminpass=") ||
+		strings.HasPrefix(arg, "--server-role=") ||
+		strings.HasPrefix(arg, "--dns-backend=") ||
+		strings.HasPrefix(arg, "--option=") {
+		return true
+	}
+	// Fall back to basic samba arg validation
+	return isSafeSambaArg(arg)
 }
 
 // isSafeSMBPath validates SMB paths
