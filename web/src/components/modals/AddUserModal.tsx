@@ -23,6 +23,7 @@ export function AddUserModal({ open, onClose, onSuccess }: AddUserModalProps) {
     description: '',
     group: '',
     ou: '',
+    mustChangePassword: true, // Default to true for new users
   })
 
   const { data: groups } = useQuery({
@@ -75,6 +76,7 @@ export function AddUserModal({ open, onClose, onSuccess }: AddUserModalProps) {
         description: formData.description,
         group: formData.group,
         ou_path: formData.ou,
+        must_change_password: formData.mustChangePassword,
       })
       onSuccess()
       onClose()
@@ -87,6 +89,7 @@ export function AddUserModal({ open, onClose, onSuccess }: AddUserModalProps) {
         description: '',
         group: '',
         ou: '',
+        mustChangePassword: true,
       })
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to create user')
@@ -218,6 +221,23 @@ export function AddUserModal({ open, onClose, onSuccess }: AddUserModalProps) {
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               />
+            </div>
+
+            <div className="col-span-2">
+              <label className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  checked={formData.mustChangePassword}
+                  onChange={(e) => setFormData({ ...formData, mustChangePassword: e.target.checked })}
+                  className="rounded border-gray-300"
+                />
+                <span className="text-sm font-medium">
+                  User must change password at next login
+                </span>
+              </label>
+              <p className="text-xs text-muted-foreground mt-1">
+                Recommended for new users to set their own secure password
+              </p>
             </div>
           </div>
 

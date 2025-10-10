@@ -4,12 +4,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Button } from '../components/ui/Button'
 import { UserPlus } from 'lucide-react'
 import { AddUserModal } from '../components/modals/AddUserModal'
-import { ManageUserModal } from '../components/modals/ManageUserModal'
+import { EditUserModal } from '../components/modals/EditUserModal'
 import api from '../lib/api'
 
 export default function Users() {
   const [showAddModal, setShowAddModal] = useState(false)
-  const [managingUser, setManagingUser] = useState<string | null>(null)
+  const [editingUser, setEditingUser] = useState<string | null>(null)
   
   const { data: usersData, isLoading, refetch } = useQuery({
     queryKey: ['users'],
@@ -40,10 +40,10 @@ export default function Users() {
         onSuccess={() => refetch()}
       />
 
-      <ManageUserModal
-        open={managingUser !== null}
-        onClose={() => setManagingUser(null)}
-        username={managingUser || ''}
+      <EditUserModal
+        open={editingUser !== null}
+        onClose={() => setEditingUser(null)}
+        username={editingUser || ''}
         onSuccess={() => refetch()}
       />
 
@@ -82,9 +82,9 @@ export default function Users() {
                   <Button 
                     variant="outline" 
                     size="sm"
-                    onClick={() => setManagingUser(user.username)}
+                    onClick={() => setEditingUser(user.username)}
                   >
-                    Manage
+                    Edit
                   </Button>
                 </div>
               ))}

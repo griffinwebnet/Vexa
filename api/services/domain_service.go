@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"os"
 	"strings"
 	"time"
 
@@ -312,6 +313,25 @@ func (s *DomainService) ProvisionDomainWithOutput(req models.ProvisionDomainRequ
 	for _, file := range files {
 		outputChan <- fmt.Sprintf("Removing %s...", file)
 		s.system.RemoveFile(file)
+	}
+
+	// Fix systemd-resolved to allow Samba DNS to bind to port 53
+	outputChan <- "Configuring systemd-resolved to allow Samba DNS..."
+	resolvedConf, _ := os.ReadFile("/etc/systemd/resolved.conf")
+	if !strings.Contains(string(resolvedConf), "DNSStubListener=no") {
+		f, err := os.OpenFile("/etc/systemd/resolved.conf", os.O_APPEND|os.O_WRONLY, 0644)
+		if err == nil {
+			f.WriteString("\nDNSStubListener=no\n")
+			f.Close()
+			outputChan <- "Added DNSStubListener=no to systemd-resolved config"
+
+			// Restart systemd-resolved
+			if cmd, err := utils.SafeCommand("systemctl", "restart", "systemd-resolved"); err == nil {
+				cmd.Run()
+				outputChan <- "Restarted systemd-resolved"
+			}
+			time.Sleep(2 * time.Second)
+		}
 	}
 
 	// Generate a secure admin password

@@ -14,6 +14,7 @@ export function ManageUserModal({ open, onClose, username, onSuccess }: ManageUs
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [generatedPassword, setGeneratedPassword] = useState('')
+  const [mustChangePassword, setMustChangePassword] = useState(false)
 
   const handleResetPassword = async () => {
     setLoading(true)
@@ -40,6 +41,21 @@ export function ManageUserModal({ open, onClose, username, onSuccess }: ManageUs
       onClose()
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to disable user')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleToggleMustChangePassword = async () => {
+    setLoading(true)
+    setError('')
+
+    try {
+      await api.post(`/users/${username}/toggle-must-change-password`)
+      setMustChangePassword(!mustChangePassword)
+      onSuccess()
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to toggle must change password flag')
     } finally {
       setLoading(false)
     }
@@ -103,6 +119,14 @@ export function ManageUserModal({ open, onClose, username, onSuccess }: ManageUs
               disabled={loading}
             >
               Reset Password
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={handleToggleMustChangePassword}
+              disabled={loading}
+            >
+              {mustChangePassword ? 'Remove' : 'Set'} "Must Change Password at Next Login"
             </Button>
             <Button
               variant="outline"

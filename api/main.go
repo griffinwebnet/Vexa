@@ -11,7 +11,7 @@ import (
 	"github.com/griffinwebnet/vexa/api/utils"
 )
 
-const Version = "0.3.120"
+const Version = "0.3.121"
 
 func main() {
 	// Parse command line flags
@@ -88,6 +88,7 @@ func main() {
 		protected.POST("/users/:id/reset-password", handlers.ResetUserPassword)
 		protected.POST("/users/:id/disable", userHandler.DisableUser)
 		protected.POST("/users/:id/enable", userHandler.EnableUser)
+		protected.POST("/users/:id/toggle-must-change-password", userHandler.ToggleMustChangePassword)
 
 		// Self-service endpoints
 		protected.POST("/users/change-password", userHandler.ChangePassword)

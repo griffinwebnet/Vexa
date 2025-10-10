@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -26,6 +27,101 @@ type DomainPolicySettings struct {
 	LockoutDuration        int            `json:"lockout_duration"`
 }
 
+// parsePasswordSettings parses the output from samba-tool domain passwordsettings show
+func parsePasswordSettings(output string) (DomainPolicySettings, error) {
+	policies := DomainPolicySettings{}
+	
+	lines := strings.Split(output, "\n")
+	
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		
+		// Parse password complexity (on/off)
+		if strings.Contains(line, "Password complexity") {
+			re := regexp.MustCompile(`Password complexity:\s*(on|off)`)
+			matches := re.FindStringSubmatch(line)
+			if len(matches) > 1 {
+				complexityOn := matches[1] == "on"
+				policies.PasswordComplexity.RequireUppercase = complexityOn
+				policies.PasswordComplexity.RequireLowercase = complexityOn
+				policies.PasswordComplexity.RequireNumbers = complexityOn
+				policies.PasswordComplexity.RequireSymbols = complexityOn
+			}
+		}
+		
+		// Parse minimum password length
+		if strings.Contains(line, "Minimum password length") {
+			re := regexp.MustCompile(`Minimum password length:\s*(\d+)`)
+			matches := re.FindStringSubmatch(line)
+			if len(matches) > 1 {
+				if val, err := strconv.Atoi(matches[1]); err == nil {
+					policies.PasswordComplexity.MinLength = val
+				}
+			}
+		}
+		
+		// Parse maximum password age
+		if strings.Contains(line, "Maximum password age") {
+			re := regexp.MustCompile(`Maximum password age:\s*(\d+)`)
+			matches := re.FindStringSubmatch(line)
+			if len(matches) > 1 {
+				if val, err := strconv.Atoi(matches[1]); err == nil {
+					policies.PasswordExpirationDays = val
+				}
+			}
+		}
+		
+		// Parse password history length
+		if strings.Contains(line, "Password history length") {
+			re := regexp.MustCompile(`Password history length:\s*(\d+)`)
+			matches := re.FindStringSubmatch(line)
+			if len(matches) > 1 {
+				if val, err := strconv.Atoi(matches[1]); err == nil {
+					policies.PasswordHistoryCount = val
+				}
+			}
+		}
+		
+		// Parse minimum password age
+		if strings.Contains(line, "Minimum password age") {
+			re := regexp.MustCompile(`Minimum password age:\s*(\d+)`)
+			matches := re.FindStringSubmatch(line)
+			if len(matches) > 1 {
+				if val, err := strconv.Atoi(matches[1]); err == nil {
+					policies.MinPasswordAge = val
+				}
+			}
+		}
+		
+		// Parse lockout threshold
+		if strings.Contains(line, "Lockout threshold") {
+			re := regexp.MustCompile(`Lockout threshold:\s*(\d+)`)
+			matches := re.FindStringSubmatch(line)
+			if len(matches) > 1 {
+				if val, err := strconv.Atoi(matches[1]); err == nil {
+					policies.LockoutThreshold = val
+				}
+			}
+		}
+		
+		// Parse lockout duration
+		if strings.Contains(line, "Lockout duration") {
+			re := regexp.MustCompile(`Lockout duration:\s*(\d+)`)
+			matches := re.FindStringSubmatch(line)
+			if len(matches) > 1 {
+				if val, err := strconv.Atoi(matches[1]); err == nil {
+					policies.LockoutDuration = val
+				}
+			}
+		}
+	}
+	
+	return policies, nil
+}
+
 // GetDomainPolicies returns current domain password and security policies
 func GetDomainPolicies(c *gin.Context) {
 	// Get current password settings using samba-tool
@@ -47,21 +143,25 @@ func GetDomainPolicies(c *gin.Context) {
 		return
 	}
 
-	// TODO: Parse output and return structured data
-	// For now, return defaults
-	policies := DomainPolicySettings{
-		PasswordComplexity: PasswordPolicy{
-			MinLength:        8,
-			RequireUppercase: true,
-			RequireLowercase: true,
-			RequireNumbers:   true,
-			RequireSymbols:   true,
-		},
-		PasswordExpirationDays: 365,
-		PasswordHistoryCount:   3,
-		MinPasswordAge:         1,
-		LockoutThreshold:       5,
-		LockoutDuration:        30,
+	// Parse the actual samba-tool output
+	policies, parseErr := parsePasswordSettings(string(output))
+	if parseErr != nil {
+		utils.Info("Failed to parse password settings, using defaults: %v", parseErr)
+		// Fallback to defaults if parsing fails
+		policies = DomainPolicySettings{
+			PasswordComplexity: PasswordPolicy{
+				MinLength:        8,
+				RequireUppercase: true,
+				RequireLowercase: true,
+				RequireNumbers:   true,
+				RequireSymbols:   true,
+			},
+			PasswordExpirationDays: 365,
+			PasswordHistoryCount:   3,
+			MinPasswordAge:         1,
+			LockoutThreshold:       5,
+			LockoutDuration:        30,
+		}
 	}
 
 	c.JSON(http.StatusOK, policies)
@@ -95,22 +195,34 @@ func UpdateDomainPolicies(c *gin.Context) {
 		{"samba-tool", "domain", "passwordsettings", "set", "--min-pwd-age=" + strconv.Itoa(req.MinPasswordAge)},
 	}
 
+	var failedCommands []string
 	for _, cmdArgs := range commands {
+		utils.Info("Executing: %s %v", cmdArgs[0], cmdArgs[1:])
 		cmd, cmdErr := utils.SafeCommand(cmdArgs[0], cmdArgs[1:]...)
 		if cmdErr != nil {
+			utils.Error("Command sanitization failed for %v: %v", cmdArgs, cmdErr)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error":   "Command sanitization failed",
 				"command": cmdArgs,
 			})
 			return
 		}
-		if err := cmd.Run(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error":   "Failed to apply password settings",
-				"command": cmdArgs,
-			})
-			return
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			utils.Error("Failed to execute %v: %v, output: %s", cmdArgs, err, string(output))
+			failedCommands = append(failedCommands, strings.Join(cmdArgs, " ")+": "+string(output))
+		} else {
+			utils.Info("Successfully executed: %s %v", cmdArgs[0], cmdArgs[1:])
 		}
+	}
+
+	if len(failedCommands) > 0 {
+		utils.Error("Some password policy commands failed: %v", failedCommands)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Some password settings failed to apply",
+			"details": failedCommands,
+		})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{

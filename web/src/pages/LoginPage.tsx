@@ -4,10 +4,11 @@ import { useAuthStore } from '../stores/authStore'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
+import { Logo } from '../components/Logo'
 import api from '../lib/api'
 
 // Get version from package.json
-const VERSION = '0.3.120'
+const VERSION = '0.3.121'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -109,10 +110,10 @@ export default function LoginPage() {
       </div>
       
       <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-3xl font-bold text-center bg-gradient-to-r from-yellow-400 to-amber-600 bg-clip-text text-transparent">
-            Vexa
-          </CardTitle>
+        <CardHeader className="space-y-4">
+          <div className="flex justify-center">
+            <Logo height={48} width={180} className="mx-auto" />
+          </div>
           <CardDescription className="text-center">
             Sign in to your directory management console
           </CardDescription>

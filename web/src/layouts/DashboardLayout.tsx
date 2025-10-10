@@ -2,6 +2,7 @@ import { Outlet, Link, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { useTheme } from '../components/ThemeProvider'
 import { Button } from '../components/ui/Button'
+import { Logo } from '../components/Logo'
 import {
   LayoutDashboard,
   Users,
@@ -54,9 +55,7 @@ export default function DashboardLayout() {
         <div className="flex h-full flex-col">
           {/* Logo */}
           <div className="flex h-16 items-center border-b border-border px-6">
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-yellow-400 to-amber-600 bg-clip-text text-transparent">
-              Vexa
-            </h1>
+            <Logo height={32} width={120} />
           </div>
 
           {/* Navigation */}

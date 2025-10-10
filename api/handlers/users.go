@@ -169,6 +169,24 @@ func (h *UserHandler) EnableUser(c *gin.Context) {
 	})
 }
 
+// ToggleMustChangePassword toggles the "must change password at next login" flag
+func (h *UserHandler) ToggleMustChangePassword(c *gin.Context) {
+	username := c.Param("id")
+
+	err := h.userService.ToggleMustChangePassword(username)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "Must change password flag toggled successfully",
+		"username": username,
+	})
+}
+
 // ChangePassword allows users to change their own password
 func (h *UserHandler) ChangePassword(c *gin.Context) {
 	fmt.Printf("DEBUG: ChangePassword endpoint called\n")
