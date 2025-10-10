@@ -609,7 +609,19 @@ func isSafeFlexibleSambaArg(arg string) bool {
 		strings.HasPrefix(arg, "--adminpass=") ||
 		strings.HasPrefix(arg, "--server-role=") ||
 		strings.HasPrefix(arg, "--dns-backend=") ||
-		strings.HasPrefix(arg, "--option=") {
+		strings.HasPrefix(arg, "--option=") ||
+		strings.HasPrefix(arg, "--given-name=") ||
+		strings.HasPrefix(arg, "--mail-address=") ||
+		strings.HasPrefix(arg, "--userou=") ||
+		strings.HasPrefix(arg, "--description=") ||
+		strings.HasPrefix(arg, "--editor=") ||
+		strings.HasPrefix(arg, "--full-name=") ||
+		strings.HasPrefix(arg, "--newpassword=") ||
+		strings.HasPrefix(arg, "--complexity=") ||
+		strings.HasPrefix(arg, "--min-pwd-length=") ||
+		strings.HasPrefix(arg, "--max-pwd-age=") ||
+		strings.HasPrefix(arg, "--history-length=") ||
+		strings.HasPrefix(arg, "--min-pwd-age=") {
 		return true
 	}
 	// Fall back to basic samba arg validation
