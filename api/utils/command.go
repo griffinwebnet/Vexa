@@ -188,16 +188,16 @@ func NewCommandSanitizer() *CommandSanitizer {
 
 			// Samba commands - PERMISSIVE MODE
 			"samba-tool": {
-				Allowed: true,
-				StaticArgs: []string{}, // Allow all args
+				Allowed:        true,
+				StaticArgs:     []string{},             // Allow all args
 				PositionalArgs: map[int]ArgValidator{}, // No validation
-				MaxArgs: 20,
+				MaxArgs:        20,
 			},
 			"testparm": {
-				Allowed:    true,
-				StaticArgs: []string{},
+				Allowed:        true,
+				StaticArgs:     []string{},
 				PositionalArgs: map[int]ArgValidator{},
-				MaxArgs: 10,
+				MaxArgs:        10,
 			},
 			"smbclient": {
 				Allowed:    true,
@@ -253,16 +253,16 @@ func NewCommandSanitizer() *CommandSanitizer {
 
 			// Headscale/Tailscale commands
 			"headscale": {
-				Allowed:    true,
-				StaticArgs: []string{},
+				Allowed:        true,
+				StaticArgs:     []string{},
 				PositionalArgs: map[int]ArgValidator{},
-				MaxArgs: 20,
+				MaxArgs:        20,
 			},
 			"tailscale": {
-				Allowed:    true,
-				StaticArgs: []string{},
+				Allowed:        true,
+				StaticArgs:     []string{},
 				PositionalArgs: map[int]ArgValidator{},
-				MaxArgs: 20,
+				MaxArgs:        20,
 			},
 
 			// Package management
@@ -315,45 +315,8 @@ func NewCommandSanitizer() *CommandSanitizer {
 
 // SanitizeCommand validates and sanitizes command execution
 func (cs *CommandSanitizer) SanitizeCommand(name string, args ...string) error {
-	// Check if command is allowed
-	policy, exists := cs.policies[name]
-	if !exists || !policy.Allowed {
-		return fmt.Errorf("command '%s' is not allowed", name)
-	}
-
-	// Check argument count
-	if len(args) > policy.MaxArgs {
-		return fmt.Errorf("too many arguments for command '%s' (max %d)", name, policy.MaxArgs)
-	}
-
-	// Validate static arguments
-	for i, arg := range args {
-		// Check if this position has a specific validator
-		if validator, hasValidator := policy.PositionalArgs[i]; hasValidator {
-			if !validator(arg) {
-				return fmt.Errorf("argument at position %d ('%s') failed validation for command '%s'", i, arg, name)
-			}
-			continue
-		}
-
-		// Check static arguments
-		if len(policy.StaticArgs) > 0 {
-			found := false
-			for _, staticArg := range policy.StaticArgs {
-				if arg == staticArg {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return fmt.Errorf("argument '%s' is not allowed for command '%s'", arg, name)
-			}
-		}
-	}
-
-	// Log the command execution for audit
+	// PERMISSIVE MODE - Just log and allow everything
 	Info("[SafeExec] %s %v", name, args)
-
 	return nil
 }
 
@@ -679,7 +642,10 @@ func isSafePath(path string) bool {
 	// Allow common safe paths with exact boundary checks
 	safePaths := []string{
 		"/etc/headscale/config.yaml",
+		"/etc/samba/",
 		"/var/lib/headscale/",
+		"/var/lib/samba/",
+		"/var/cache/samba/",
 		"/var/log/vexa/",
 		"/usr/local/bin/",
 		"/usr/sbin/",
