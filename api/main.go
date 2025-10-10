@@ -11,7 +11,7 @@ import (
 	"github.com/griffinwebnet/vexa/api/utils"
 )
 
-const Version = "0.3.125"
+const Version = "0.3.126"
 
 func main() {
 	// Parse command line flags

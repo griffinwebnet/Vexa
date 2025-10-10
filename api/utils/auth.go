@@ -31,7 +31,7 @@ func AuthenticateSAMBA(username, password string) bool {
 	defer cancel()
 
 	// Method 1: Try simple smbclient first (most reliable for basic auth)
-	// method replaces earlier fallback smb method deleted as of 0.3.125
+	// method replaces earlier fallback smb method deleted as of 0.3.126
 	cmd, err := SafeCommandContext(ctx, "smbclient", "//localhost/ipc$", "-U", username+"%"+password, "-c", "exit")
 	if err != nil {
 		Error("Command sanitization failed for smbclient: %v", err)

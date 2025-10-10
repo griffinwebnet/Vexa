@@ -8,7 +8,7 @@ import { Logo } from '../components/Logo'
 import api from '../lib/api'
 
 // Get version from package.json
-const VERSION = '0.3.125'
+const VERSION = '0.3.126'
 
 export default function LoginPage() {
   const navigate = useNavigate()
