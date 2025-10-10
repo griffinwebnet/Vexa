@@ -176,39 +176,41 @@ func (s *UserService) getUserGroups(username string) ([]string, error) {
 
 // UpdateUser updates an existing user
 func (s *UserService) UpdateUser(username string, req models.UpdateUserRequest) error {
+	// Get user's DN first
+	userDN, err := s.getUserDN(username)
+	if err != nil {
+		utils.Error("Failed to get user DN for %s: %v", username, err)
+		return fmt.Errorf("failed to get user DN: %v", err)
+	}
+
 	// Update full name if provided
-	if req.FullName != nil {
-		cmd, cmdErr := utils.SafeCommand("samba-tool", "user", "set", username, "--full-name="+*req.FullName)
-		if cmdErr != nil {
-			return fmt.Errorf("command sanitization failed: %v", cmdErr)
+	if req.FullName != nil && *req.FullName != "" {
+		utils.Info("Updating full name for user %s to: %s", username, *req.FullName)
+		if err := s.modifyLDAPAttribute(userDN, "givenName", *req.FullName); err != nil {
+			utils.Error("Failed to update full name: %v", err)
+			return fmt.Errorf("failed to update full name: %v", err)
 		}
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("failed to update full name: %s", string(output))
+		// Also update displayName
+		if err := s.modifyLDAPAttribute(userDN, "displayName", *req.FullName); err != nil {
+			utils.Warn("Failed to update display name: %v", err)
 		}
 	}
 
 	// Update email if provided
-	if req.Email != nil {
-		cmd, cmdErr := utils.SafeCommand("samba-tool", "user", "set", username, "--mail-address="+*req.Email)
-		if cmdErr != nil {
-			return fmt.Errorf("command sanitization failed: %v", cmdErr)
-		}
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("failed to update email: %s", string(output))
+	if req.Email != nil && *req.Email != "" {
+		utils.Info("Updating email for user %s to: %s", username, *req.Email)
+		if err := s.modifyLDAPAttribute(userDN, "mail", *req.Email); err != nil {
+			utils.Error("Failed to update email: %v", err)
+			return fmt.Errorf("failed to update email: %v", err)
 		}
 	}
 
 	// Update description if provided
-	if req.Description != nil {
-		cmd, cmdErr := utils.SafeCommand("samba-tool", "user", "set", username, "--description="+*req.Description)
-		if cmdErr != nil {
-			return fmt.Errorf("command sanitization failed: %v", cmdErr)
-		}
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("failed to update description: %s", string(output))
+	if req.Description != nil && *req.Description != "" {
+		utils.Info("Updating description for user %s", username)
+		if err := s.modifyLDAPAttribute(userDN, "description", *req.Description); err != nil {
+			utils.Error("Failed to update description: %v", err)
+			return fmt.Errorf("failed to update description: %v", err)
 		}
 	}
 
@@ -298,36 +300,38 @@ func (s *UserService) ChangeUserPassword(username, newPassword string) error {
 func (s *UserService) UpdateUserProfile(username, fullName, email string) error {
 	utils.Info("Updating profile for user: %s (FullName: %s, Email: %s)", username, fullName, email)
 
+	// Get user's DN first
+	userDN, err := s.getUserDN(username)
+	if err != nil {
+		utils.Error("Failed to get user DN for %s: %v", username, err)
+		return fmt.Errorf("failed to get user DN: %v", err)
+	}
+
 	// Update full name if provided
 	if fullName != "" {
-		cmd, cmdErr := utils.SafeCommand("samba-tool", "user", "set", username, "--full-name="+fullName)
-		if cmdErr != nil {
-			utils.Error("Command sanitization failed for updating full name: %v", cmdErr)
-			return fmt.Errorf("command sanitization failed: %v", cmdErr)
+		utils.Info("Updating full name for user %s to: %s", username, fullName)
+		if err := s.modifyLDAPAttribute(userDN, "givenName", fullName); err != nil {
+			utils.Error("Failed to update full name: %v", err)
+			return fmt.Errorf("failed to update full name: %v", err)
 		}
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			utils.Error("Failed to update full name for user %s: %s", username, string(output))
-			return fmt.Errorf("failed to update full name: %s", string(output))
+		// Also update displayName
+		if err := s.modifyLDAPAttribute(userDN, "displayName", fullName); err != nil {
+			utils.Warn("Failed to update display name: %v", err)
 		}
 		utils.Info("Full name updated successfully for user: %s", username)
 	}
 
 	// Update email if provided
 	if email != "" {
-		cmd, cmdErr := utils.SafeCommand("samba-tool", "user", "set", username, "--mail-address="+email)
-		if cmdErr != nil {
-			utils.Error("Command sanitization failed for updating email: %v", cmdErr)
-			return fmt.Errorf("command sanitization failed: %v", cmdErr)
-		}
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			utils.Error("Failed to update email for user %s: %s", username, string(output))
-			return fmt.Errorf("failed to update email: %s", string(output))
+		utils.Info("Updating email for user %s to: %s", username, email)
+		if err := s.modifyLDAPAttribute(userDN, "mail", email); err != nil {
+			utils.Error("Failed to update email: %v", err)
+			return fmt.Errorf("failed to update email: %v", err)
 		}
 		utils.Info("Email updated successfully for user: %s", username)
 	}
 
+	utils.Info("Profile update completed successfully for user: %s", username)
 	return nil
 }
 
@@ -362,4 +366,49 @@ func (s *UserService) ToggleMustChangePassword(username string) error {
 
 	// Simple approach: just set the flag (we'll improve this later)
 	return s.SetMustChangePassword(username)
+}
+
+// getUserDN gets the DN (Distinguished Name) for a user
+func (s *UserService) getUserDN(username string) (string, error) {
+	output, err := s.sambaTool.UserShow(username)
+	if err != nil {
+		return "", err
+	}
+
+	// Parse the DN from the output
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "dn:") {
+			dn := strings.TrimSpace(strings.TrimPrefix(line, "dn:"))
+			return dn, nil
+		}
+	}
+
+	return "", fmt.Errorf("could not find DN for user %s", username)
+}
+
+// modifyLDAPAttribute modifies a single LDAP attribute for a user
+func (s *UserService) modifyLDAPAttribute(userDN, attribute, value string) error {
+	// Create LDIF content for the modification
+	ldif := fmt.Sprintf(`dn: %s
+changetype: modify
+replace: %s
+%s: %s
+`, userDN, attribute, attribute, value)
+
+	// Use ldbmodify to apply the change
+	cmd, cmdErr := utils.SafeCommand("ldbmodify", "-H", "/var/lib/samba/private/sam.ldb", "--controls=relax:0")
+	if cmdErr != nil {
+		return fmt.Errorf("command sanitization failed: %v", cmdErr)
+	}
+
+	// Pass LDIF via stdin
+	cmd.Stdin = strings.NewReader(ldif)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("ldbmodify failed: %s", string(output))
+	}
+
+	return nil
 }
