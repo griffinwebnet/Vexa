@@ -284,44 +284,48 @@ func (s *UserService) addUserToGroup(username, groupName string) error {
 
 // ChangeUserPassword changes a user's password
 func (s *UserService) ChangeUserPassword(username, newPassword string) error {
-	fmt.Printf("DEBUG: Changing password for user: %s\n", username)
+	utils.Info("Changing password for user: %s", username)
 	output, err := s.sambaTool.UserSetPassword(username, newPassword)
 	if err != nil {
-		fmt.Printf("DEBUG: Failed to change password for %s: %v, output: %s\n", username, err, output)
+		utils.Error("Failed to change password for user %s: %v, output: %s", username, err, output)
 		return fmt.Errorf("failed to change password: %s", output)
 	}
-	fmt.Printf("DEBUG: Password changed successfully for user: %s\n", username)
+	utils.Info("Password changed successfully for user: %s", username)
 	return nil
 }
 
 // UpdateUserProfile updates a user's profile information
 func (s *UserService) UpdateUserProfile(username, fullName, email string) error {
-	fmt.Printf("DEBUG: Updating profile for %s - FullName: %s, Email: %s\n", username, fullName, email)
+	utils.Info("Updating profile for user: %s (FullName: %s, Email: %s)", username, fullName, email)
 
 	// Update full name if provided
 	if fullName != "" {
 		cmd, cmdErr := utils.SafeCommand("samba-tool", "user", "set", username, "--full-name="+fullName)
 		if cmdErr != nil {
+			utils.Error("Command sanitization failed for updating full name: %v", cmdErr)
 			return fmt.Errorf("command sanitization failed: %v", cmdErr)
 		}
 		output, err := cmd.CombinedOutput()
 		if err != nil {
+			utils.Error("Failed to update full name for user %s: %s", username, string(output))
 			return fmt.Errorf("failed to update full name: %s", string(output))
 		}
-		fmt.Printf("DEBUG: Full name updated successfully for %s\n", username)
+		utils.Info("Full name updated successfully for user: %s", username)
 	}
 
 	// Update email if provided
 	if email != "" {
 		cmd, cmdErr := utils.SafeCommand("samba-tool", "user", "set", username, "--mail-address="+email)
 		if cmdErr != nil {
+			utils.Error("Command sanitization failed for updating email: %v", cmdErr)
 			return fmt.Errorf("command sanitization failed: %v", cmdErr)
 		}
 		output, err := cmd.CombinedOutput()
 		if err != nil {
+			utils.Error("Failed to update email for user %s: %s", username, string(output))
 			return fmt.Errorf("failed to update email: %s", string(output))
 		}
-		fmt.Printf("DEBUG: Email updated successfully for %s\n", username)
+		utils.Info("Email updated successfully for user: %s", username)
 	}
 
 	return nil
@@ -330,12 +334,12 @@ func (s *UserService) UpdateUserProfile(username, fullName, email string) error 
 // SetMustChangePassword sets the "must change password at next login" flag
 func (s *UserService) SetMustChangePassword(username string) error {
 	// Use LDAP modify to set pwdLastSet to 0 (forces password change on next login)
-	output, err := s.sambaTool.Run("user", "setpassword", username, "--newpassword=PLACEHOLDER", "--must-change")
+	_, err := s.sambaTool.Run("user", "setpassword", username, "--newpassword=PLACEHOLDER", "--must-change")
 	if err != nil {
 		// If that doesn't work, try setting pwdLastSet to 0 via LDAP
-		output, err = s.sambaTool.Run("ldapmodify", "-H", "ldapi://", "-Y", "GSSAPI", "-x", "-D", "cn=admin,dc=vfw5788,dc=local", "-W")
-		if err != nil {
-			return fmt.Errorf("failed to set must-change-password flag: %s", output)
+		output2, err2 := s.sambaTool.Run("ldapmodify", "-H", "ldapi://", "-Y", "GSSAPI", "-x", "-D", "cn=admin,dc=vfw5788,dc=local", "-W")
+		if err2 != nil {
+			return fmt.Errorf("failed to set must-change-password flag: %s", output2)
 		}
 	}
 	return nil
