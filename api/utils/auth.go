@@ -31,7 +31,7 @@ func AuthenticateSAMBA(username, password string) bool {
 	defer cancel()
 
 	// Method 1: Try simple smbclient first (most reliable for basic auth)
-	// method replaces earlier fallback smb method deleted as of 0.3.126
+	// method replaces earlier fallback smb method deleted as of 0.3.127
 	cmd, err := SafeCommandContext(ctx, "smbclient", "//localhost/ipc$", "-U", username+"%"+password, "-c", "exit")
 	if err != nil {
 		Error("Command sanitization failed for smbclient: %v", err)
@@ -123,7 +123,10 @@ func getDomainName() string {
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if strings.Contains(line, "NetBIOS Domain:") {
+		// Try multiple variations of the domain name field
+		if strings.Contains(line, "NetBIOS Domain:") ||
+			strings.Contains(line, "Netbios domain :") ||
+			strings.Contains(line, "NetBIOS domain:") {
 			parts := strings.Split(line, ":")
 			if len(parts) > 1 {
 				domain := strings.TrimSpace(parts[1])
