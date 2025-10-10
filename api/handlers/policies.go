@@ -10,62 +10,53 @@ import (
 	"github.com/griffinwebnet/vexa/api/utils"
 )
 
-type PasswordPolicy struct {
-	MinLength        int  `json:"min_length"`
-	RequireUppercase bool `json:"require_uppercase"`
-	RequireLowercase bool `json:"require_lowercase"`
-	RequireNumbers   bool `json:"require_numbers"`
-	RequireSymbols   bool `json:"require_symbols"`
-}
-
 type DomainPolicySettings struct {
-	PasswordComplexity     PasswordPolicy `json:"password_complexity"`
-	PasswordExpirationDays int            `json:"password_expiration_days"`
-	PasswordHistoryCount   int            `json:"password_history_count"`
-	MinPasswordAge         int            `json:"min_password_age"`
-	LockoutThreshold       int            `json:"lockout_threshold"`
-	LockoutDuration        int            `json:"lockout_duration"`
+	PasswordComplexityEnabled bool `json:"password_complexity_enabled"` // Simple toggle: true = secure, false = insecure
+	PasswordExpirationDays    int  `json:"password_expiration_days"`    // 0 = never expires
+	PasswordHistoryCount      int  `json:"password_history_count"`      // Number of previous passwords to remember
+	MinPasswordLength         int  `json:"min_password_length"`         // Minimum password length
+	LockoutThreshold          int  `json:"lockout_threshold"`           // 0 = disabled
+	LockoutDuration           int  `json:"lockout_duration"`            // Minutes
 }
 
 // parsePasswordSettings parses the output from samba-tool domain passwordsettings show
 func parsePasswordSettings(output string) (DomainPolicySettings, error) {
-	policies := DomainPolicySettings{}
-	
+	policies := DomainPolicySettings{
+		PasswordExpirationDays: 0, // Default to never expires
+		MinPasswordLength:      7, // Samba default
+	}
+
 	lines := strings.Split(output, "\n")
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		
+
 		// Parse password complexity (on/off)
 		if strings.Contains(line, "Password complexity") {
 			re := regexp.MustCompile(`Password complexity:\s*(on|off)`)
 			matches := re.FindStringSubmatch(line)
 			if len(matches) > 1 {
-				complexityOn := matches[1] == "on"
-				policies.PasswordComplexity.RequireUppercase = complexityOn
-				policies.PasswordComplexity.RequireLowercase = complexityOn
-				policies.PasswordComplexity.RequireNumbers = complexityOn
-				policies.PasswordComplexity.RequireSymbols = complexityOn
+				policies.PasswordComplexityEnabled = (matches[1] == "on")
 			}
 		}
-		
+
 		// Parse minimum password length
 		if strings.Contains(line, "Minimum password length") {
 			re := regexp.MustCompile(`Minimum password length:\s*(\d+)`)
 			matches := re.FindStringSubmatch(line)
 			if len(matches) > 1 {
 				if val, err := strconv.Atoi(matches[1]); err == nil {
-					policies.PasswordComplexity.MinLength = val
+					policies.MinPasswordLength = val
 				}
 			}
 		}
-		
-		// Parse maximum password age
+
+		// Parse maximum password age (days)
 		if strings.Contains(line, "Maximum password age") {
-			re := regexp.MustCompile(`Maximum password age:\s*(\d+)`)
+			re := regexp.MustCompile(`Maximum password age.*:\s*(\d+)`)
 			matches := re.FindStringSubmatch(line)
 			if len(matches) > 1 {
 				if val, err := strconv.Atoi(matches[1]); err == nil {
@@ -73,7 +64,7 @@ func parsePasswordSettings(output string) (DomainPolicySettings, error) {
 				}
 			}
 		}
-		
+
 		// Parse password history length
 		if strings.Contains(line, "Password history length") {
 			re := regexp.MustCompile(`Password history length:\s*(\d+)`)
@@ -84,21 +75,10 @@ func parsePasswordSettings(output string) (DomainPolicySettings, error) {
 				}
 			}
 		}
-		
-		// Parse minimum password age
-		if strings.Contains(line, "Minimum password age") {
-			re := regexp.MustCompile(`Minimum password age:\s*(\d+)`)
-			matches := re.FindStringSubmatch(line)
-			if len(matches) > 1 {
-				if val, err := strconv.Atoi(matches[1]); err == nil {
-					policies.MinPasswordAge = val
-				}
-			}
-		}
-		
+
 		// Parse lockout threshold
-		if strings.Contains(line, "Lockout threshold") {
-			re := regexp.MustCompile(`Lockout threshold:\s*(\d+)`)
+		if strings.Contains(line, "Account lockout threshold") {
+			re := regexp.MustCompile(`Account lockout threshold.*:\s*(\d+)`)
 			matches := re.FindStringSubmatch(line)
 			if len(matches) > 1 {
 				if val, err := strconv.Atoi(matches[1]); err == nil {
@@ -106,10 +86,10 @@ func parsePasswordSettings(output string) (DomainPolicySettings, error) {
 				}
 			}
 		}
-		
-		// Parse lockout duration
-		if strings.Contains(line, "Lockout duration") {
-			re := regexp.MustCompile(`Lockout duration:\s*(\d+)`)
+
+		// Parse lockout duration (minutes)
+		if strings.Contains(line, "Account lockout duration") {
+			re := regexp.MustCompile(`Account lockout duration.*:\s*(\d+)`)
 			matches := re.FindStringSubmatch(line)
 			if len(matches) > 1 {
 				if val, err := strconv.Atoi(matches[1]); err == nil {
@@ -118,7 +98,7 @@ func parsePasswordSettings(output string) (DomainPolicySettings, error) {
 			}
 		}
 	}
-	
+
 	return policies, nil
 }
 
@@ -146,28 +126,25 @@ func GetDomainPolicies(c *gin.Context) {
 	// Parse the actual samba-tool output
 	policies, parseErr := parsePasswordSettings(string(output))
 	if parseErr != nil {
-		utils.Info("Failed to parse password settings, using defaults: %v", parseErr)
+		utils.Warn("Failed to parse password settings, using defaults: %v", parseErr)
 		// Fallback to defaults if parsing fails
 		policies = DomainPolicySettings{
-			PasswordComplexity: PasswordPolicy{
-				MinLength:        8,
-				RequireUppercase: true,
-				RequireLowercase: true,
-				RequireNumbers:   true,
-				RequireSymbols:   true,
-			},
-			PasswordExpirationDays: 365,
-			PasswordHistoryCount:   3,
-			MinPasswordAge:         1,
-			LockoutThreshold:       5,
-			LockoutDuration:        30,
+			PasswordComplexityEnabled: false, // Default to insecure (off)
+			MinPasswordLength:         7,     // Samba minimum
+			PasswordExpirationDays:    0,     // Never expires
+			PasswordHistoryCount:      0,     // No history
+			LockoutThreshold:          0,     // No lockout
+			LockoutDuration:           30,    // 30 minutes if enabled
 		}
 	}
+
+	utils.Info("Retrieved domain policies: complexity=%v, expiration=%d days, history=%d",
+		policies.PasswordComplexityEnabled, policies.PasswordExpirationDays, policies.PasswordHistoryCount)
 
 	c.JSON(http.StatusOK, policies)
 }
 
-// UpdateDomainPolicies updates domain password and security policies
+// UpdateDomainPolicies updates domain password and security policies and applies them to ALL users
 func UpdateDomainPolicies(c *gin.Context) {
 	var req DomainPolicySettings
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -177,27 +154,26 @@ func UpdateDomainPolicies(c *gin.Context) {
 		return
 	}
 
-	// Set password complexity
+	utils.Info("Updating domain policies: complexity=%v, expiration=%d days, history=%d",
+		req.PasswordComplexityEnabled, req.PasswordExpirationDays, req.PasswordHistoryCount)
+
+	// Set password complexity (simple on/off toggle)
 	complexityValue := "off"
-	if req.PasswordComplexity.RequireUppercase &&
-		req.PasswordComplexity.RequireLowercase &&
-		req.PasswordComplexity.RequireNumbers &&
-		req.PasswordComplexity.RequireSymbols {
+	if req.PasswordComplexityEnabled {
 		complexityValue = "on"
 	}
 
-	// Apply settings using samba-tool
+	// Apply domain-wide settings using samba-tool
 	commands := [][]string{
 		{"samba-tool", "domain", "passwordsettings", "set", "--complexity=" + complexityValue},
-		{"samba-tool", "domain", "passwordsettings", "set", "--min-pwd-length=" + strconv.Itoa(req.PasswordComplexity.MinLength)},
+		{"samba-tool", "domain", "passwordsettings", "set", "--min-pwd-length=" + strconv.Itoa(req.MinPasswordLength)},
 		{"samba-tool", "domain", "passwordsettings", "set", "--max-pwd-age=" + strconv.Itoa(req.PasswordExpirationDays)},
 		{"samba-tool", "domain", "passwordsettings", "set", "--history-length=" + strconv.Itoa(req.PasswordHistoryCount)},
-		{"samba-tool", "domain", "passwordsettings", "set", "--min-pwd-age=" + strconv.Itoa(req.MinPasswordAge)},
 	}
 
 	var failedCommands []string
 	for _, cmdArgs := range commands {
-		utils.Info("Executing: %s %v", cmdArgs[0], cmdArgs[1:])
+		utils.Info("Executing: %s", strings.Join(cmdArgs, " "))
 		cmd, cmdErr := utils.SafeCommand(cmdArgs[0], cmdArgs[1:]...)
 		if cmdErr != nil {
 			utils.Error("Command sanitization failed for %v: %v", cmdArgs, cmdErr)
@@ -212,7 +188,7 @@ func UpdateDomainPolicies(c *gin.Context) {
 			utils.Error("Failed to execute %v: %v, output: %s", cmdArgs, err, string(output))
 			failedCommands = append(failedCommands, strings.Join(cmdArgs, " ")+": "+string(output))
 		} else {
-			utils.Info("Successfully executed: %s %v", cmdArgs[0], cmdArgs[1:])
+			utils.Info("Successfully executed: %s", strings.Join(cmdArgs, " "))
 		}
 	}
 
@@ -225,8 +201,43 @@ func UpdateDomainPolicies(c *gin.Context) {
 		return
 	}
 
+	// Apply password expiration to ALL existing users
+	if req.PasswordExpirationDays == 0 {
+		utils.Info("Setting all user passwords to never expire")
+		// Get list of all users
+		userListCmd, cmdErr := utils.SafeCommand("samba-tool", "user", "list")
+		if cmdErr == nil {
+			output, err := userListCmd.CombinedOutput()
+			if err == nil {
+				users := strings.Split(strings.TrimSpace(string(output)), "\n")
+				successCount := 0
+				failCount := 0
+
+				for _, username := range users {
+					username = strings.TrimSpace(username)
+					if username == "" || username == "krbtgt" || username == "Guest" {
+						continue // Skip system accounts
+					}
+
+					// Set password to never expire for this user
+					expiryCmd, expiryErr := utils.SafeCommand("samba-tool", "user", "setexpiry", username, "--noexpiry")
+					if expiryErr == nil {
+						_, err := expiryCmd.CombinedOutput()
+						if err == nil {
+							successCount++
+						} else {
+							failCount++
+						}
+					}
+				}
+				utils.Info("Set password never expires for %d users (%d failed)", successCount, failCount)
+			}
+		}
+	}
+
+	utils.Info("Domain password policies updated successfully")
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Password policies updated successfully",
+		"message": "Password policies updated successfully and applied to all users",
 	})
 }
 

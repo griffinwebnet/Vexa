@@ -286,11 +286,32 @@ func (s *UserService) addUserToGroup(username, groupName string) error {
 
 // ChangeUserPassword changes a user's password
 func (s *UserService) ChangeUserPassword(username, newPassword string) error {
-	utils.Info("Changing password for user: %s", username)
+	utils.Info("Changing password for user: %s (password length: %d)", username, len(newPassword))
+
+	// Log password complexity (without revealing the password)
+	hasUpper := false
+	hasLower := false
+	hasDigit := false
+	hasSpecial := false
+	for _, ch := range newPassword {
+		if ch >= 'A' && ch <= 'Z' {
+			hasUpper = true
+		} else if ch >= 'a' && ch <= 'z' {
+			hasLower = true
+		} else if ch >= '0' && ch <= '9' {
+			hasDigit = true
+		} else {
+			hasSpecial = true
+		}
+	}
+	utils.Info("Password complexity: length=%d, upper=%v, lower=%v, digit=%v, special=%v",
+		len(newPassword), hasUpper, hasLower, hasDigit, hasSpecial)
+
 	output, err := s.sambaTool.UserSetPassword(username, newPassword)
 	if err != nil {
-		utils.Error("Failed to change password for user %s: %v, output: %s", username, err, output)
-		return fmt.Errorf("failed to change password: %s", output)
+		utils.Error("Failed to change password for user %s: %v", username, err)
+		utils.Error("Samba output: %s", output)
+		return fmt.Errorf("password change failed: %s", output)
 	}
 	utils.Info("Password changed successfully for user: %s", username)
 	return nil
@@ -397,8 +418,8 @@ replace: %s
 %s: %s
 `, userDN, attribute, attribute, value)
 
-	// Use ldbmodify to apply the change
-	cmd, cmdErr := utils.SafeCommand("ldbmodify", "-H", "/var/lib/samba/private/sam.ldb", "--controls=relax:0")
+	// Use ldbmodify to apply the change (without relax control to avoid affecting passwords)
+	cmd, cmdErr := utils.SafeCommand("ldbmodify", "-H", "/var/lib/samba/private/sam.ldb")
 	if cmdErr != nil {
 		return fmt.Errorf("command sanitization failed: %v", cmdErr)
 	}
@@ -407,8 +428,10 @@ replace: %s
 	cmd.Stdin = strings.NewReader(ldif)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		utils.Error("ldbmodify failed for attribute %s: %s", attribute, string(output))
 		return fmt.Errorf("ldbmodify failed: %s", string(output))
 	}
 
+	utils.Debug("Successfully modified attribute %s for DN: %s", attribute, userDN)
 	return nil
 }
