@@ -192,10 +192,10 @@ func NewCommandSanitizer() *CommandSanitizer {
 				StaticArgs: []string{
 					"domain", "info", "user", "create", "list", "group", "dns", "add", "settings", "set",
 					"127.0.0.1", "ou", "delete", "passwordsettings", "show", "-s", "--parameter-name",
-					"computer", "provision", "--use-rfc2307",
+					"computer", "provision", "--use-rfc2307", "--version",
 				},
 				PositionalArgs: map[int]ArgValidator{
-					1: func(arg string) bool {
+					0: func(arg string) bool {
 						// Allow domain provision arguments with = signs
 						if strings.HasPrefix(arg, "--realm=") ||
 							strings.HasPrefix(arg, "--domain=") ||
