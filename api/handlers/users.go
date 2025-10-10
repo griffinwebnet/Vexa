@@ -15,12 +15,14 @@ import (
 // UserHandler handles HTTP requests for user operations
 type UserHandler struct {
 	userService *services.UserService
+	authService *services.AuthService
 }
 
 // NewUserHandler creates a new UserHandler instance
 func NewUserHandler() *UserHandler {
 	return &UserHandler{
 		userService: services.NewUserService(),
+		authService: services.NewAuthService(),
 	}
 }
 
@@ -201,6 +203,7 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 
 	jwtClaims := claims.(jwt.MapClaims)
 	username := jwtClaims["username"].(string)
+	fmt.Printf("DEBUG: Changing password for user: %s\n", username)
 
 	var req struct {
 		CurrentPassword string `json:"current_password" binding:"required"`
@@ -208,38 +211,80 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
+		fmt.Printf("DEBUG: Invalid request format: %v\n", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
 		return
 	}
 
 	// Verify current password directly against Samba (not through auth service)
 	// This avoids auth service logout issues during password verification
+	fmt.Printf("DEBUG: Verifying current password for user: %s\n", username)
 	if !utils.VerifyCurrentPassword(username, req.CurrentPassword) {
+		fmt.Printf("DEBUG: Current password verification failed for user: %s\n", username)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current password is incorrect"})
 		return
 	}
+	fmt.Printf("DEBUG: Current password verified successfully for user: %s\n", username)
 
 	// Change password
+	fmt.Printf("DEBUG: Attempting to change password for user: %s\n", username)
 	err := h.userService.ChangeUserPassword(username, req.NewPassword)
 	if err != nil {
+		fmt.Printf("DEBUG: Password change failed for user %s: %v\n", username, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Password changed successfully"})
+	fmt.Printf("DEBUG: Password changed successfully for user: %s\n", username)
+
+	// Get user's admin status and domain user status from claims
+	isAdmin := false
+	isDomainUser := true // Default to domain user for password changes
+	if adminClaim, exists := jwtClaims["is_admin"]; exists {
+		if adminBool, ok := adminClaim.(bool); ok {
+			isAdmin = adminBool
+		}
+	}
+	if domainClaim, exists := jwtClaims["is_domain_user"]; exists {
+		if domainBool, ok := domainClaim.(bool); ok {
+			isDomainUser = domainBool
+		}
+	}
+
+	// Generate a new JWT token with the same permissions
+	loginResponse, tokenErr := h.authService.GenerateToken(username, isAdmin, isDomainUser)
+	if tokenErr != nil {
+		fmt.Printf("DEBUG: Failed to generate new token for user %s: %v\n", username, tokenErr)
+		// Password was changed successfully, but we can't generate a new token
+		// User will need to log in again
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Password changed successfully. Please log in again with your new password.",
+		})
+		return
+	}
+
+	// Return the new token so the user stays logged in
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Password changed successfully",
+		"token":   loginResponse.Token,
+	})
 }
 
 // UpdateProfile allows users to update their own profile
 func (h *UserHandler) UpdateProfile(c *gin.Context) {
+	fmt.Printf("DEBUG: UpdateProfile endpoint called\n")
+
 	// Get username from JWT token
 	claims, exists := c.Get("claims")
 	if !exists {
+		fmt.Printf("DEBUG: No authentication claims found\n")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "No authentication claims"})
 		return
 	}
 
 	jwtClaims := claims.(jwt.MapClaims)
 	username := jwtClaims["username"].(string)
+	fmt.Printf("DEBUG: Updating profile for user: %s\n", username)
 
 	var req struct {
 		FullName string `json:"full_name"`
@@ -247,16 +292,20 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
+		fmt.Printf("DEBUG: Invalid request format: %v\n", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
 		return
 	}
 
 	// Update profile
+	fmt.Printf("DEBUG: Attempting to update profile - FullName: %s, Email: %s\n", req.FullName, req.Email)
 	err := h.userService.UpdateUserProfile(username, req.FullName, req.Email)
 	if err != nil {
+		fmt.Printf("DEBUG: Profile update failed for user %s: %v\n", username, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	fmt.Printf("DEBUG: Profile updated successfully for user: %s\n", username)
 	c.JSON(http.StatusOK, gin.H{"message": "Profile updated successfully"})
 }

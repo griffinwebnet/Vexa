@@ -31,7 +31,7 @@ func AuthenticateSAMBA(username, password string) bool {
 	defer cancel()
 
 	// Method 1: Try simple smbclient first (most reliable for basic auth)
-	// method replaces earlier fallback smb method deleted as of 0.3.122
+	// method replaces earlier fallback smb method deleted as of 0.3.123
 	cmd, err := SafeCommandContext(ctx, "smbclient", "//localhost/ipc$", "-U", username+"%"+password, "-c", "exit")
 	if err != nil {
 		Error("Command sanitization failed for smbclient: %v", err)
@@ -179,27 +179,28 @@ func VerifyCurrentPassword(username, password string) bool {
 	// Get domain name
 	domainName := getDomainName()
 	if domainName == "" {
-		Debug("No domain name detected for password verification\n")
+		Debug("No domain name detected for password verification")
 		return false
 	}
+	Debug("Domain name found: %s", domainName)
 
 	// Try with domain prefix first
-	Debug("Trying password verification with domain prefix %s\\%s\n", domainName, username)
+	Debug("Trying password verification with domain prefix %s\\%s", domainName, username)
 	cmd, err := SafeCommandContext(ctx, "smbclient", "//localhost/ipc$", "-U", domainName+"\\"+username+"%"+password, "-c", "exit")
 	if err != nil {
-		Debug("Command sanitization failed for smbclient domain: %v\n", err)
+		Debug("Command sanitization failed for smbclient domain: %v", err)
 		return false
 	}
 	output, err2 := cmd.CombinedOutput()
 	if err2 == nil {
-		Debug("Password verification successful for %s\\%s\n", domainName, username)
+		Debug("Password verification successful for %s\\%s", domainName, username)
 		return true
 	} else {
-		Debug("Password verification failed for %s\\%s: %v, output: %s\n", domainName, username, err2, string(output))
+		Debug("Password verification failed for %s\\%s: %v, output: %s", domainName, username, err2, string(output))
 	}
 
 	// Try without domain prefix
-	Debug("Trying password verification without domain prefix for %s\n", username)
+	Debug("Trying password verification without domain prefix for %s", username)
 	cmd2, err := SafeCommandContext(ctx, "smbclient", "//localhost/ipc$", "-U", username+"%"+password, "-c", "exit")
 	if err != nil {
 		Debug("Command sanitization failed for smbclient: %v", err)
@@ -213,7 +214,7 @@ func VerifyCurrentPassword(username, password string) bool {
 		Debug("Password verification failed for %s: %v, output: %s", username, err3, string(output2))
 	}
 
-	Debug("Password verification failed for user %s\n", username)
+	Debug("Password verification failed for user %s", username)
 	return false
 }
 

@@ -4,7 +4,7 @@ import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/Dialog'
-import { User, Key, Shield } from 'lucide-react'
+import { User, Key, Shield, CheckCircle, AlertCircle } from 'lucide-react'
 import api from '../lib/api'
 
 export default function SelfService() {
@@ -53,11 +53,17 @@ export default function SelfService() {
     }
 
     try {
-      await api.post('/users/change-password', {
+      const response = await api.post('/users/change-password', {
         current_password: passwordForm.currentPassword,
         new_password: passwordForm.newPassword
       })
-      setSuccess('Password changed successfully')
+      
+      // If a new token is returned, update it in localStorage
+      if (response.data.token) {
+        localStorage.setItem('token', response.data.token)
+      }
+      
+      setSuccess('Password changed successfully!')
       setIsChangePasswordOpen(false)
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
     } catch (err: any) {
@@ -75,8 +81,19 @@ export default function SelfService() {
         full_name: profileForm.fullName,
         email: profileForm.email
       })
-      setSuccess('Profile updated successfully')
+      setSuccess('Profile updated successfully!')
       setIsUpdateProfileOpen(false)
+      
+      // Reload profile to show updated information
+      try {
+        const response = await api.get(`/users/${username}`)
+        setProfileForm({
+          fullName: response.data.user?.full_name || '',
+          email: response.data.user?.email || ''
+        })
+      } catch (error) {
+        console.error('Failed to reload profile:', error)
+      }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to update profile')
     }
@@ -93,13 +110,19 @@ export default function SelfService() {
 
       {error && (
         <div className="p-4 rounded-lg bg-destructive/15 border border-destructive/20">
-          <div className="text-sm text-destructive">{error}</div>
+          <div className="flex items-center gap-2 text-sm text-destructive">
+            <AlertCircle className="h-5 w-5" />
+            <span>{error}</span>
+          </div>
         </div>
       )}
 
       {success && (
         <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
-          <div className="text-sm text-green-600">{success}</div>
+          <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+            <CheckCircle className="h-5 w-5" />
+            <span>{success}</span>
+          </div>
         </div>
       )}
 
@@ -199,8 +222,9 @@ export default function SelfService() {
                 type="text"
                 value={profileForm.fullName}
                 onChange={(e) => setProfileForm(prev => ({ ...prev, fullName: e.target.value }))}
-                required
+                placeholder="Enter your full name"
               />
+              <p className="text-xs text-muted-foreground">Leave blank to keep current value</p>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Email Address</label>
@@ -208,8 +232,9 @@ export default function SelfService() {
                 type="email"
                 value={profileForm.email}
                 onChange={(e) => setProfileForm(prev => ({ ...prev, email: e.target.value }))}
-                required
+                placeholder="Enter your email address"
               />
+              <p className="text-xs text-muted-foreground">Leave blank to keep current value</p>
             </div>
             <Button type="submit" className="w-full">
               Update Profile

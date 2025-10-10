@@ -24,65 +24,10 @@ var nouns = []string{
 
 var symbols = []string{"!", "@", "#", "$", "%", "&", "*"}
 
-// ChangePasswordRequest represents a password change request
-type ChangePasswordRequest struct {
-	CurrentPassword string `json:"current_password"`
-	NewPassword     string `json:"new_password"`
-}
-
 // UpdateProfileRequest represents a profile update request
 type UpdateProfileRequest struct {
 	FullName string `json:"full_name"`
 	Email    string `json:"email"`
-}
-
-// ChangePassword changes a user's password
-func ChangePassword(c *gin.Context) {
-	username := c.GetString("username") // From JWT auth middleware
-
-	var req ChangePasswordRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid request format",
-		})
-		return
-	}
-
-	// Verify current password
-	cmd, cmdErr := utils.SafeCommand("smbclient", "-L", "localhost", "-U", username+"%"+req.CurrentPassword)
-	if cmdErr != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Command sanitization failed",
-		})
-		return
-	}
-	if err := cmd.Run(); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "Current password is incorrect",
-		})
-		return
-	}
-
-	// Change password
-	cmd, cmdErr = utils.SafeCommand("samba-tool", "user", "setpassword", username, "--newpassword="+req.NewPassword)
-	if cmdErr != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Command sanitization failed",
-		})
-		return
-	}
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to change password",
-			"details": string(output),
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Password changed successfully",
-	})
 }
 
 // UpdateProfile updates a user's profile information

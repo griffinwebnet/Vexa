@@ -178,7 +178,7 @@ func (s *UserService) getUserGroups(username string) ([]string, error) {
 func (s *UserService) UpdateUser(username string, req models.UpdateUserRequest) error {
 	// Update full name if provided
 	if req.FullName != nil {
-		cmd, cmdErr := utils.SafeCommand("samba-tool", "user", "edit", username, "--editor=/bin/echo", "--full-name="+*req.FullName)
+		cmd, cmdErr := utils.SafeCommand("samba-tool", "user", "set", username, "--full-name="+*req.FullName)
 		if cmdErr != nil {
 			return fmt.Errorf("command sanitization failed: %v", cmdErr)
 		}
@@ -190,7 +190,7 @@ func (s *UserService) UpdateUser(username string, req models.UpdateUserRequest) 
 
 	// Update email if provided
 	if req.Email != nil {
-		cmd, cmdErr := utils.SafeCommand("samba-tool", "user", "edit", username, "--editor=/bin/echo", "--mail-address="+*req.Email)
+		cmd, cmdErr := utils.SafeCommand("samba-tool", "user", "set", username, "--mail-address="+*req.Email)
 		if cmdErr != nil {
 			return fmt.Errorf("command sanitization failed: %v", cmdErr)
 		}
@@ -202,7 +202,7 @@ func (s *UserService) UpdateUser(username string, req models.UpdateUserRequest) 
 
 	// Update description if provided
 	if req.Description != nil {
-		cmd, cmdErr := utils.SafeCommand("samba-tool", "user", "edit", username, "--editor=/bin/echo", "--description="+*req.Description)
+		cmd, cmdErr := utils.SafeCommand("samba-tool", "user", "set", username, "--description="+*req.Description)
 		if cmdErr != nil {
 			return fmt.Errorf("command sanitization failed: %v", cmdErr)
 		}
@@ -296,9 +296,34 @@ func (s *UserService) ChangeUserPassword(username, newPassword string) error {
 
 // UpdateUserProfile updates a user's profile information
 func (s *UserService) UpdateUserProfile(username, fullName, email string) error {
-	// For now, we'll just return success since Samba doesn't easily store these fields
-	// In a full implementation, you might store this in LDAP attributes
 	fmt.Printf("DEBUG: Updating profile for %s - FullName: %s, Email: %s\n", username, fullName, email)
+
+	// Update full name if provided
+	if fullName != "" {
+		cmd, cmdErr := utils.SafeCommand("samba-tool", "user", "set", username, "--full-name="+fullName)
+		if cmdErr != nil {
+			return fmt.Errorf("command sanitization failed: %v", cmdErr)
+		}
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failed to update full name: %s", string(output))
+		}
+		fmt.Printf("DEBUG: Full name updated successfully for %s\n", username)
+	}
+
+	// Update email if provided
+	if email != "" {
+		cmd, cmdErr := utils.SafeCommand("samba-tool", "user", "set", username, "--mail-address="+email)
+		if cmdErr != nil {
+			return fmt.Errorf("command sanitization failed: %v", cmdErr)
+		}
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failed to update email: %s", string(output))
+		}
+		fmt.Printf("DEBUG: Email updated successfully for %s\n", username)
+	}
+
 	return nil
 }
 
