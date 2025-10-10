@@ -21,8 +21,14 @@ func NewUserService() *UserService {
 	}
 }
 
-// ListUsers returns all users in the domain
+// ListUsers returns all users in the domain (excluding system accounts)
 func (s *UserService) ListUsers() ([]models.User, error) {
+	// System accounts to filter out
+	systemAccounts := map[string]bool{
+		"krbtgt":        true, // Kerberos service account
+		"Administrator": true, // Built-in administrator
+		"Guest":         true, // Built-in guest account
+	}
 
 	output, err := s.sambaTool.UserList()
 	if err != nil {
@@ -33,12 +39,19 @@ func (s *UserService) ListUsers() ([]models.User, error) {
 	users := make([]models.User, 0, len(usernames))
 
 	for _, username := range usernames {
+		// Skip system accounts
+		if systemAccounts[username] {
+			utils.Debug("Filtering out system account: %s", username)
+			continue
+		}
+
 		users = append(users, models.User{
 			Username: username,
 			Enabled:  true, // TODO: Get actual status
 		})
 	}
 
+	utils.Info("Listed %d users (filtered %d system accounts)", len(users), len(usernames)-len(users))
 	return users, nil
 }
 
@@ -230,12 +243,38 @@ func (s *UserService) UpdateUser(username string, req models.UpdateUserRequest) 
 	}
 
 	// Update group membership if provided
-	if req.Group != nil && *req.Group != "" && *req.Group != "Domain Users" {
-		// Remove from current groups and add to new group
-		// For now, we'll just add to the new group
-		output, err := s.sambaTool.Run("group", "addmembers", *req.Group, username)
+	if req.Group != nil {
+		utils.Info("Updating group membership for user %s to: %s", username, *req.Group)
+
+		// First, get current groups the user belongs to
+		currentGroups, err := s.getUserGroups(username)
 		if err != nil {
-			return fmt.Errorf("failed to update group membership: %s", output)
+			utils.Warn("Could not get current groups for user %s: %v", username, err)
+			currentGroups = []string{}
+		}
+
+		// Remove user from all non-system groups
+		for _, group := range currentGroups {
+			// Don't remove from system groups
+			if group == "Domain Users" || group == "Users" {
+				continue
+			}
+
+			utils.Info("Removing user %s from group: %s", username, group)
+			output, err := s.sambaTool.Run("group", "removemembers", group, username)
+			if err != nil {
+				utils.Warn("Failed to remove user %s from group %s: %s", username, group, output)
+			}
+		}
+
+		// Add user to new group if specified
+		if *req.Group != "" && *req.Group != "Domain Users" {
+			utils.Info("Adding user %s to group: %s", username, *req.Group)
+			output, err := s.sambaTool.Run("group", "addmembers", *req.Group, username)
+			if err != nil {
+				return fmt.Errorf("failed to add user to group %s: %s", *req.Group, output)
+			}
+			utils.Info("Successfully added user %s to group %s", username, *req.Group)
 		}
 	}
 

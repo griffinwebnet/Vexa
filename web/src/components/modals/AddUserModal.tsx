@@ -56,6 +56,11 @@ export function AddUserModal({ open, onClose, onSuccess }: AddUserModalProps) {
   }
 
   const flatOUs = ous ? flattenOUs(ous) : []
+  
+  // Alphabetically sort groups
+  const sortedGroups = groups?.groups ? 
+    [...groups.groups].sort((a: any, b: any) => a.name.localeCompare(b.name)) : 
+    []
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -156,7 +161,7 @@ export function AddUserModal({ open, onClose, onSuccess }: AddUserModalProps) {
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
               >
                 <option value="">Domain Users (default)</option>
-                {groups?.groups?.map((group: any) => (
+                {sortedGroups.map((group: any) => (
                   <option key={group.name} value={group.name}>
                     {group.name}
                   </option>

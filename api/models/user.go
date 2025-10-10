@@ -24,10 +24,11 @@ type CreateUserRequest struct {
 
 // UpdateUserRequest represents the request to update an existing user
 type UpdateUserRequest struct {
-	FullName    *string `json:"full_name,omitempty"`
-	Email       *string `json:"email,omitempty"`
-	Description *string `json:"description,omitempty"`
-	Enabled     *bool   `json:"enabled,omitempty"`
-	Group       *string `json:"group,omitempty"`
-	OUPath      *string `json:"ou_path,omitempty"`
+	FullName    *string   `json:"full_name,omitempty"`
+	Email       *string   `json:"email,omitempty"`
+	Description *string   `json:"description,omitempty"`
+	Enabled     *bool     `json:"enabled,omitempty"`
+	Group       *string   `json:"group,omitempty"` // Deprecated: use Groups instead
+	Groups      *[]string `json:"groups,omitempty"` // Array of groups to assign
+	OUPath      *string   `json:"ou_path,omitempty"`
 }

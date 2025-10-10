@@ -25,6 +25,8 @@ export function EditUserModal({ open, onClose, username, onSuccess }: EditUserMo
     enabled: true,
     mustChangePassword: false,
   })
+  const [userGroups, setUserGroups] = useState<string[]>([])
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([])
 
   const { data: groups } = useQuery({
     queryKey: ['groups'],
@@ -54,12 +56,29 @@ export function EditUserModal({ open, onClose, username, onSuccess }: EditUserMo
   const loadUserData = async () => {
     try {
       const response = await api.get(`/users/${username}`)
-      const userData = response.data
+      const userData = response.data.user || response.data
+      
+      // Store all user's groups
+      const allUserGroups = userData.groups && Array.isArray(userData.groups) ? userData.groups : []
+      setUserGroups(allUserGroups)
+      
+      // Filter out system groups for selection
+      const nonSystemGroups = allUserGroups.filter((g: string) => 
+        g !== 'Domain Users' && g !== 'Users'
+      )
+      setSelectedGroups(nonSystemGroups)
+      
+      // Get primary group for backwards compatibility
+      let primaryGroup = ''
+      if (nonSystemGroups.length > 0) {
+        primaryGroup = nonSystemGroups[0]
+      }
+      
       setFormData({
         fullName: userData.full_name || '',
         email: userData.email || '',
         description: userData.description || '',
-        group: userData.primary_group || '',
+        group: primaryGroup,
         ou: userData.ou_path || '',
         enabled: userData.enabled !== false,
         mustChangePassword: userData.must_change_password || false,
@@ -82,6 +101,26 @@ export function EditUserModal({ open, onClose, username, onSuccess }: EditUserMo
   }
 
   const flatOUs = ous ? flattenOUs(ous) : []
+  
+  // Alphabetically sort groups
+  const sortedGroups = groups?.groups ? 
+    [...groups.groups].sort((a: any, b: any) => a.name.localeCompare(b.name)) : 
+    []
+  
+  // Filter out system groups from the sortedGroups
+  const customGroups = sortedGroups.filter((g: any) => 
+    g.name !== 'Domain Users' && g.name !== 'Users'
+  )
+
+  const toggleGroupSelection = (groupName: string) => {
+    setSelectedGroups(prev => {
+      if (prev.includes(groupName)) {
+        return prev.filter(g => g !== groupName)
+      } else {
+        return [...prev, groupName]
+      }
+    })
+  }
 
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -94,7 +133,7 @@ export function EditUserModal({ open, onClose, username, onSuccess }: EditUserMo
         email: formData.email,
         description: formData.description,
         enabled: formData.enabled,
-        group: formData.group,
+        groups: selectedGroups, // Send array of selected groups
         ou_path: formData.ou,
       })
       onSuccess()
@@ -247,47 +286,84 @@ export function EditUserModal({ open, onClose, username, onSuccess }: EditUserMo
             </div>
           </div>
 
-          {/* Group and OU Settings */}
+          {/* Group Membership */}
           <div className="space-y-4">
-            <h3 className="text-lg font-medium">Directory Settings</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label htmlFor="group" className="text-sm font-medium">
-                  Primary Group
-                </label>
-                <select
-                  id="group"
-                  value={formData.group}
-                  onChange={(e) => setFormData({ ...formData, group: e.target.value })}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
-                >
-                  <option value="">Domain Users (default)</option>
-                  {groups?.groups?.map((group: any) => (
-                    <option key={group.name} value={group.name}>
-                      {group.name}
-                    </option>
-                  ))}
-                </select>
+            <h3 className="text-lg font-medium">Group Membership</h3>
+            
+            {/* Current Groups (Tags) */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Current Groups</label>
+              <div className="flex flex-wrap gap-2 p-3 min-h-[60px] rounded-md border border-input bg-background">
+                {userGroups.length === 0 ? (
+                  <span className="text-sm text-muted-foreground">Domain Users only</span>
+                ) : (
+                  userGroups.map((group) => (
+                    <span
+                      key={group}
+                      className={`inline-flex items-center px-3 py-1 rounded-full text-sm ${
+                        group === 'Domain Admins' || group === 'Administrators'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-foreground'
+                      }`}
+                    >
+                      {group}
+                    </span>
+                  ))
+                )}
               </div>
+            </div>
 
-              <div className="space-y-2">
-                <label htmlFor="ou" className="text-sm font-medium">
-                  Organizational Unit
-                </label>
-                <select
-                  id="ou"
-                  value={formData.ou}
-                  onChange={(e) => setFormData({ ...formData, ou: e.target.value })}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
-                >
-                  <option value="">Domain Root (default)</option>
-                  {flatOUs.map((ou) => (
-                    <option key={ou.path} value={ou.path}>
-                      {ou.name} {ou.description ? `- ${ou.description}` : ''}
-                    </option>
-                  ))}
-                </select>
+            {/* Group Selection (Checkboxes) */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select Groups</label>
+              <div className="grid grid-cols-2 gap-3 p-4 rounded-md border border-input bg-background max-h-[200px] overflow-y-auto">
+                {customGroups.length === 0 ? (
+                  <div className="col-span-2 text-sm text-muted-foreground text-center py-4">
+                    No custom groups available. All users are in Domain Users by default.
+                  </div>
+                ) : (
+                  customGroups.map((group: any) => (
+                    <label
+                      key={group.name}
+                      className="flex items-center space-x-2 cursor-pointer hover:bg-accent/50 p-2 rounded"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedGroups.includes(group.name)}
+                        onChange={() => toggleGroupSelection(group.name)}
+                        className="h-4 w-4 rounded border-gray-300"
+                      />
+                      <span className="text-sm">{group.name}</span>
+                    </label>
+                  ))
+                )}
               </div>
+              <p className="text-xs text-muted-foreground">
+                Check/uncheck groups to manage membership. Changes apply when you save.
+              </p>
+            </div>
+          </div>
+
+          {/* OU Settings */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium">Organizational Unit</h3>
+            <div className="space-y-2">
+              <label htmlFor="ou" className="text-sm font-medium">
+                OU Location
+              </label>
+              <select
+                id="ou"
+                value={formData.ou}
+                onChange={(e) => setFormData({ ...formData, ou: e.target.value })}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+              >
+                <option value="">Domain Root (default)</option>
+                {flatOUs.map((ou) => (
+                  <option key={ou.path} value={ou.path}>
+                    {ou.name} {ou.description ? `- ${ou.description}` : ''}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
