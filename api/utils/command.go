@@ -188,12 +188,27 @@ func NewCommandSanitizer() *CommandSanitizer {
 
 			// Samba commands
 			"samba-tool": {
-				Allowed:    true,
-				StaticArgs: []string{"domain", "info", "user", "create", "list", "group", "dns", "add", "settings", "set", "127.0.0.1", "ou", "delete", "passwordsettings", "show", "-s", "--parameter-name", "computer"},
-				PositionalArgs: map[int]ArgValidator{
-					1: isSafeSambaArg,
+				Allowed: true,
+				StaticArgs: []string{
+					"domain", "info", "user", "create", "list", "group", "dns", "add", "settings", "set",
+					"127.0.0.1", "ou", "delete", "passwordsettings", "show", "-s", "--parameter-name",
+					"computer", "provision", "--use-rfc2307",
 				},
-				MaxArgs: 10,
+				PositionalArgs: map[int]ArgValidator{
+					1: func(arg string) bool {
+						// Allow domain provision arguments with = signs
+						if strings.HasPrefix(arg, "--realm=") ||
+							strings.HasPrefix(arg, "--domain=") ||
+							strings.HasPrefix(arg, "--adminpass=") ||
+							strings.HasPrefix(arg, "--server-role=") ||
+							strings.HasPrefix(arg, "--dns-backend=") ||
+							strings.HasPrefix(arg, "--option=") {
+							return true
+						}
+						return isSafeSambaArg(arg)
+					},
+				},
+				MaxArgs: 15,
 			},
 			"testparm": {
 				Allowed:    true,
@@ -570,7 +585,7 @@ func isSafeSambaArg(arg string) bool {
 	allowedArgs := []string{
 		"server role", "workgroup", "realm", "netbios name",
 		"domain", "info", "user", "create", "list", "group",
-		"dns", "add", "settings", "set", "forwarder",
+		"dns", "add", "settings", "set", "forwarder", "provision",
 	}
 
 	for _, allowed := range allowedArgs {
