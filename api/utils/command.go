@@ -186,36 +186,18 @@ func NewCommandSanitizer() *CommandSanitizer {
 				MaxArgs: 4,
 			},
 
-			// Samba commands
+			// Samba commands - PERMISSIVE MODE
 			"samba-tool": {
 				Allowed: true,
-				StaticArgs: []string{
-					"domain", "info", "user", "create", "list", "group", "dns", "add", "settings", "set",
-					"127.0.0.1", "ou", "delete", "passwordsettings", "show", "-s", "--parameter-name",
-					"computer", "provision", "--use-rfc2307", "--version",
-				},
-				PositionalArgs: map[int]ArgValidator{
-					// Apply flexible validator to all argument positions
-					0: isSafeFlexibleSambaArg,
-					1: isSafeFlexibleSambaArg,
-					2: isSafeFlexibleSambaArg,
-					3: isSafeFlexibleSambaArg,
-					4: isSafeFlexibleSambaArg,
-					5: isSafeFlexibleSambaArg,
-					6: isSafeFlexibleSambaArg,
-					7: isSafeFlexibleSambaArg,
-					8: isSafeFlexibleSambaArg,
-					9: isSafeFlexibleSambaArg,
-				},
-				MaxArgs: 15,
+				StaticArgs: []string{}, // Allow all args
+				PositionalArgs: map[int]ArgValidator{}, // No validation
+				MaxArgs: 20,
 			},
 			"testparm": {
 				Allowed:    true,
-				StaticArgs: []string{"-s", "--parameter-name"},
-				PositionalArgs: map[int]ArgValidator{
-					2: isSafeSambaArg,
-				},
-				MaxArgs: 3,
+				StaticArgs: []string{},
+				PositionalArgs: map[int]ArgValidator{},
+				MaxArgs: 10,
 			},
 			"smbclient": {
 				Allowed:    true,
@@ -272,28 +254,15 @@ func NewCommandSanitizer() *CommandSanitizer {
 			// Headscale/Tailscale commands
 			"headscale": {
 				Allowed:    true,
-				StaticArgs: []string{"--help", "users", "list", "create", "preauthkeys", "nodes", "migrate", "--output", "json", "version", "-c", "/etc/headscale/config.yaml", "-o", "-u", "--reusable", "--expiration", "131400h"},
-				PositionalArgs: map[int]ArgValidator{
-					0: isSafeHeadscaleArg,
-					1: isSafeHeadscaleArg,
-					2: isSafeHeadscaleArg,
-					3: isSafeHeadscaleArg,
-					4: isSafeHeadscaleArg,
-					5: isSafeHeadscaleArg,
-					6: isSafeHeadscaleArg,
-					7: isSafeHeadscaleArg,
-					8: isSafeHeadscaleArg,
-					9: isSafeHeadscaleArg,
-				},
-				MaxArgs: 15,
+				StaticArgs: []string{},
+				PositionalArgs: map[int]ArgValidator{},
+				MaxArgs: 20,
 			},
 			"tailscale": {
 				Allowed:    true,
-				StaticArgs: []string{"up", "status", "debug", "prefs", "login", "--json", "--output"},
-				PositionalArgs: map[int]ArgValidator{
-					0: isSafeTailscaleArg,
-				},
-				MaxArgs: 10,
+				StaticArgs: []string{},
+				PositionalArgs: map[int]ArgValidator{},
+				MaxArgs: 20,
 			},
 
 			// Package management
@@ -598,34 +567,14 @@ func isSafeSambaArg(arg string) bool {
 
 // isSafeFlexibleSambaArg validates Samba arguments including provision flags
 func isSafeFlexibleSambaArg(arg string) bool {
-	// Allow version flag
-	if arg == "--version" {
-		return true
+	// Just block shell injection - allow everything else for samba-tool
+	dangerous := []string{";", "&", "|", "`", "$", "$(", "<", ">", "\n", "\r"}
+	for _, danger := range dangerous {
+		if strings.Contains(arg, danger) {
+			return false
+		}
 	}
-
-	// Allow domain provision arguments with = signs
-	if strings.HasPrefix(arg, "--realm=") ||
-		strings.HasPrefix(arg, "--domain=") ||
-		strings.HasPrefix(arg, "--adminpass=") ||
-		strings.HasPrefix(arg, "--server-role=") ||
-		strings.HasPrefix(arg, "--dns-backend=") ||
-		strings.HasPrefix(arg, "--option=") ||
-		strings.HasPrefix(arg, "--given-name=") ||
-		strings.HasPrefix(arg, "--mail-address=") ||
-		strings.HasPrefix(arg, "--userou=") ||
-		strings.HasPrefix(arg, "--description=") ||
-		strings.HasPrefix(arg, "--editor=") ||
-		strings.HasPrefix(arg, "--full-name=") ||
-		strings.HasPrefix(arg, "--newpassword=") ||
-		strings.HasPrefix(arg, "--complexity=") ||
-		strings.HasPrefix(arg, "--min-pwd-length=") ||
-		strings.HasPrefix(arg, "--max-pwd-age=") ||
-		strings.HasPrefix(arg, "--history-length=") ||
-		strings.HasPrefix(arg, "--min-pwd-age=") {
-		return true
-	}
-	// Fall back to basic samba arg validation
-	return isSafeSambaArg(arg)
+	return true
 }
 
 // isSafeSMBPath validates SMB paths

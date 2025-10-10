@@ -2,6 +2,7 @@ package exec
 
 import (
 	"bufio"
+	"fmt"
 	"strings"
 
 	"github.com/griffinwebnet/vexa/api/utils"
@@ -175,6 +176,8 @@ func (s *SambaTool) DomainProvisionWithOutput(options DomainProvisionOptions, ou
 	// Run provision command with streaming output
 	cmd, cmdErr := utils.SafeCommand("samba-tool", args...)
 	if cmdErr != nil {
+		outputChan <- fmt.Sprintf("ERROR: Command sanitization failed: %v", cmdErr)
+		outputChan <- fmt.Sprintf("ERROR: Command args: %v", args)
 		return "", cmdErr
 	}
 
