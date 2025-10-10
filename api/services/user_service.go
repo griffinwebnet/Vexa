@@ -6,6 +6,7 @@ import (
 
 	"github.com/griffinwebnet/vexa/api/exec"
 	"github.com/griffinwebnet/vexa/api/models"
+	"github.com/griffinwebnet/vexa/api/utils"
 )
 
 // UserService handles user-related business logic
@@ -177,25 +178,37 @@ func (s *UserService) getUserGroups(username string) ([]string, error) {
 func (s *UserService) UpdateUser(username string, req models.UpdateUserRequest) error {
 	// Update full name if provided
 	if req.FullName != nil {
-		output, err := s.sambaTool.Run("user", "edit", username, "--full-name="+*req.FullName)
+		cmd, cmdErr := utils.SafeCommand("samba-tool", "user", "edit", username, "--editor=/bin/echo", "--full-name="+*req.FullName)
+		if cmdErr != nil {
+			return fmt.Errorf("command sanitization failed: %v", cmdErr)
+		}
+		output, err := cmd.CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("failed to update full name: %s", output)
+			return fmt.Errorf("failed to update full name: %s", string(output))
 		}
 	}
 
 	// Update email if provided
 	if req.Email != nil {
-		output, err := s.sambaTool.Run("user", "edit", username, "--mail-address="+*req.Email)
+		cmd, cmdErr := utils.SafeCommand("samba-tool", "user", "edit", username, "--editor=/bin/echo", "--mail-address="+*req.Email)
+		if cmdErr != nil {
+			return fmt.Errorf("command sanitization failed: %v", cmdErr)
+		}
+		output, err := cmd.CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("failed to update email: %s", output)
+			return fmt.Errorf("failed to update email: %s", string(output))
 		}
 	}
 
 	// Update description if provided
 	if req.Description != nil {
-		output, err := s.sambaTool.Run("user", "edit", username, "--description="+*req.Description)
+		cmd, cmdErr := utils.SafeCommand("samba-tool", "user", "edit", username, "--editor=/bin/echo", "--description="+*req.Description)
+		if cmdErr != nil {
+			return fmt.Errorf("command sanitization failed: %v", cmdErr)
+		}
+		output, err := cmd.CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("failed to update description: %s", output)
+			return fmt.Errorf("failed to update description: %s", string(output))
 		}
 	}
 
