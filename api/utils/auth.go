@@ -123,15 +123,30 @@ func getDomainName() string {
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		// Try multiple variations of the domain name field
-		if strings.Contains(line, "NetBIOS Domain:") ||
-			strings.Contains(line, "Netbios domain :") ||
-			strings.Contains(line, "NetBIOS domain:") {
-			parts := strings.Split(line, ":")
+		lineLower := strings.ToLower(line)
+
+		// Try multiple variations of the domain name field (case insensitive)
+		if strings.Contains(lineLower, "netbios domain") || strings.Contains(lineLower, "netbios_domain") {
+			// Split on colon and get everything after it
+			parts := strings.SplitN(line, ":", 2)
 			if len(parts) > 1 {
 				domain := strings.TrimSpace(parts[1])
-				Debug("Found domain name: %s", domain)
-				return domain
+				if domain != "" {
+					Debug("Found domain name: %s", domain)
+					return domain
+				}
+			}
+		}
+
+		// Also try DC netbios name
+		if strings.Contains(lineLower, "dc netbios name") {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) > 1 {
+				domain := strings.TrimSpace(parts[1])
+				if domain != "" {
+					Debug("Found DC netbios name: %s", domain)
+					return domain
+				}
 			}
 		}
 	}
