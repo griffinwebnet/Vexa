@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
+import { Card, CardContent, CardDescription, CardHeader } from '../components/ui/Card'
 import { Logo } from '../components/Logo'
 import api from '../lib/api'
 
